@@ -1,0 +1,39 @@
+# --- Model files -------------------------------------------------------------
+# Not in git on purpose. Together they are about 1.3 GB and four of them exceed
+# GitHub's hard 100 MB limit per file. They are distributed through Printables,
+# and tools/ regenerates every derived one from the upstream full.stl in a few
+# minutes. See models/README.md.
+models/upstream/
+models/generated/
+models/slicer/
+
+# Rasterised height fields -- caches, rebuilt on demand in about a minute
+tools/*.npz
+
+# MicroPython runtime. Download the build for your board from micropython.org,
+# the exact version used here is named in firmware/README.md.
+firmware/micropython/
+
+# --- FreeCAD -----------------------------------------------------------------
+*.FCBak
+*.FCStd[0-9]
+*.FCStd.*
+
+# --- Python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# --- Editors and OS ----------------------------------------------------------
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Contact sheets: self-contained HTML that embeds every PNG next to it as a
+# base64 data URI, so it duplicates ~11 MB already in the repository.
+# Regenerate with tools/preview_moon.py and firmware/tests/preview_firmware.py.
+preview/optics/contact_sheet.html
+preview/firmware/firmware_preview.html

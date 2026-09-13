@@ -1,0 +1,44 @@
+<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv='refresh' content='30'><title>Mondlampe</title><style>
+:root{--fg:#14161a;--bg:#eef0f2;--card:#fff;--mut:#5c646e;--line:#d6dbe1;
+ --accent:#b87333;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--fg:#e6e9ed;--bg:#101317;
+ --card:#191d22;--mut:#98a1ac;--line:#282e35;--accent:#d99a5b}}
+*{box-sizing:border-box}
+body{font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;
+ padding:24px 18px 56px;max-width:36rem;margin-inline:auto;
+ background:var(--bg);color:var(--fg)}
+h1{font-size:1.6rem;margin:0 0 .3rem;letter-spacing:-.02em}
+h2{font-size:.78rem;text-transform:uppercase;letter-spacing:.09em;
+ color:var(--mut);margin:1.8rem 0 .6rem;font-weight:600}
+.sub{color:var(--mut);font-size:.9rem;margin:0 0 1.2rem}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));
+ gap:1px;background:var(--line);border:1px solid var(--line);
+ border-radius:10px;overflow:hidden;margin:0}
+.facts>div{background:var(--card);padding:10px 12px}
+dt{font-size:.68rem;text-transform:uppercase;letter-spacing:.07em;
+ color:var(--mut);margin:0 0 2px}
+dd{margin:0;font-weight:600;font-variant-numeric:tabular-nums;font-size:.95rem}
+.progs{display:grid;gap:.5rem}
+.prog{display:block;padding:.7rem .85rem;border:1px solid var(--line);
+ border-radius:10px;background:var(--card);text-decoration:none;color:inherit}
+.prog b{display:block;font-size:.95rem}
+.prog span{display:block;color:var(--mut);font-size:.8rem;margin-top:2px}
+.prog.on{border-color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:.45rem}
+.chip{padding:.5rem .8rem;border:1px solid var(--line);border-radius:999px;
+ background:var(--card);text-decoration:none;color:inherit;font-size:.88rem}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip.warn{color:#c0392b}
+label{display:block;margin:0 0 .9rem;font-size:.9rem}
+label output{float:right;color:var(--mut);font-variant-numeric:tabular-nums}
+input,select{width:100%;padding:.5rem;font:inherit;margin-top:.3rem;
+ border:1px solid var(--line);border-radius:8px;background:var(--card);
+ color:inherit}
+input[type=range]{padding:0;border:0;background:transparent;accent-color:var(--accent)}
+button{width:100%;padding:.75rem;font:inherit;font-weight:600;border:0;
+ border-radius:9px;background:var(--accent);color:#fff;margin-top:.4rem}
+.msg{color:var(--mut);font-size:.9rem}
+.hint{color:var(--mut);font-size:.82rem;margin-top:1.6rem}
+</style></head><body><h1>Mondlampe</h1><p class='sub'>verbunden mit Zora &middot; 192.168.178.58 &middot; -36 dBm</p><dl class='facts'><div><dt>Programm</dt><dd>P2 Echter Mond</dd></div><div><dt>Helligkeit</dt><dd>10 %</dd></div><div><dt>IP</dt><dd>192.168.178.58</dd></div><div><dt>Mondphase</dt><dd>63 % abnehmend</dd></div><div><dt>Mondhoehe</dt><dd>+21.4 Grad ueber dem Horizont</dd></div></dl><h2>Programm</h2><div class='progs'><a class='prog' href='/set?program=0'><b>P0 &middot; Demo</b><span>Alle Modi im Zeitraffer, ein Monat in einer Minute. Braucht weder Netz noch Uhrzeit.</span></a><a class='prog' href='/set?program=1'><b>P1 &middot; Mondphase</b><span>Die aktuelle Mondphase, rund um die Uhr sichtbar.</span></a><a class='prog on' href='/set?program=2'><b>P2 &middot; Echter Mond</b><span>Wie P1, aber nur wenn der Mond wirklich am Himmel steht. Helligkeit und Farbe folgen seiner Hoehe.</span></a><a class='prog' href='/set?program=3'><b>P3 &middot; Farbwechsel</b><span>Vollmond mit langsam wanderndem Farbton.</span></a><a class='prog' href='/set?program=4'><b>P4 &middot; Nachtlicht</b><span>Dunkelstmoegliches warmes Weiss auf dem ganzen Ring.</span></a><a class='prog' href='/set?program=5'><b>P5 &middot; Manuell</b><span>Azimut, Beleuchtungsgrad und Waerme von Hand.</span></a></div><h2>Helligkeit</h2><div class='chips'><a class='chip' href='/set?brightness=0'>0.3&nbsp;%</a><a class='chip' href='/set?brightness=1'>1&nbsp;%</a><a class='chip' href='/set?brightness=2'>3&nbsp;%</a><a class='chip on' href='/set?brightness=3'>10&nbsp;%</a><a class='chip' href='/set?brightness=4'>30&nbsp;%</a><a class='chip' href='/set?brightness=5'>100&nbsp;%</a></div><h2>Manuell &mdash; schaltet auf P5</h2><form action='/set'><input type='hidden' name='program' value='5'><label>Beleuchtungsgrad <output>50&nbsp;%</output><input name='illum' type='range' min='0' max='100' value='50' oninput="this.parentNode.querySelector('output').textContent=this.value+' %'"></label><label>Richtung<select name='waxing'><option value='1'>zunehmend &ndash; Licht von rechts</option><option value='0'>abnehmend &ndash; Licht von links</option></select></label><label>W&auml;rme <output>0&nbsp;%</output><input name='warmth' type='range' min='0' max='100' value='0' oninput="this.parentNode.querySelector('output').textContent=this.value+' %'"></label><button type='submit'>&Uuml;bernehmen</button></form><h2>Ger&auml;t</h2><div class='chips'><a class='chip' href='/calibrate'>Winkel kalibrieren</a><a class='chip' href='/reboot'>Neu starten</a><a class='chip warn' href='/forget'>WLAN vergessen</a></div><p class='hint'>Die Seite aktualisiert sich alle 30&nbsp;Sekunden. Der Winkel von Pixel&nbsp;0 l&auml;sst sich auch am Ger&auml;t einstellen: Programmtaste lange dr&uuml;cken.</p></body></html>

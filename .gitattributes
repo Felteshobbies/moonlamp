@@ -1,0 +1,16 @@
+# Normalise text to LF in the repository, check out native on Windows
+* text=auto
+
+*.py    text diff=python
+*.md    text
+*.json  text
+*.html  text
+
+# Binary assets -- never diff or convert these
+*.stl   binary
+*.3mf   binary
+*.FCStd binary
+*.uf2   binary
+*.npz   binary
+*.png   binary
+*.pdf   binary

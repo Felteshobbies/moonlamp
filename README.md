@@ -1,0 +1,176 @@
+# Moon Lamp
+
+A 3D-printed wall lamp that shows the **real, current phase of the moon**.
+
+A ring of RGBW LEDs lights the moon relief from the side. The relief is domed —
+it rises 20 mm towards the centre — so light entering from one side is blocked
+from reaching the other. That turns a brightness gradient into an actual
+terminator, and the crater rims catch light beyond the shadow line exactly the
+way they do in photographs of the real moon.
+
+A Raspberry Pi Pico W computes sun and moon positions on the device and drives
+the ring. No cloud service, no API key; Wi-Fi is used only to set the clock.
+
+> **Status:** the lamp works. The firmware runs on hardware, and the optical
+> and astronomical parts are covered by tests that run on a PC without any
+> hardware attached. See [Status](#status) for what is still rough.
+
+---
+
+## Why the dome matters
+
+The original design has a flat relief. With a flat disc, the far side of the
+moon still receives about **10 %** of the light from the LEDs opposite — the
+disc gets dimmer towards the far edge, but it never goes dark, so every phase
+reads as "full moon, unevenly lit".
+
+With the 20 mm dome, the shadow side drops below **0.01 %**. That is the whole
+trick, and it is what makes phases legible.
+
+The profile is conical rather than a spherical cap, which turned out to be
+better on two counts: the shadow edge is sharper, and a cone is a
+[developable surface][dev] — so an already printed flat relief can in principle
+be warmed and formed into it, which a spherical cap cannot.
+
+[dev]: https://en.wikipedia.org/wiki/Developable_surface
+
+Renders of the whole parameter study are in [`preview/optics/`](preview/optics/)
+— dome heights, LED heights, profile shapes and arc widths, side by side.
+
+---
+
+## Repository layout
+
+| | |
+|---|---|
+| [`firmware/`](firmware/) | MicroPython for the Pico W: ephemeris, rendering, dithering, PIO LED driver, web interface |
+| [`tools/`](tools/) | Python scripts that warp, split and verify the STL, plus the optical simulator |
+| [`cad/`](cad/) | FreeCAD sources of the revised frame and the PrusaSlicer projects |
+| [`models/`](models/) | The STL files — **not in git**, see [models/README.md](models/README.md) |
+| [`preview/`](preview/) | Renders from the optical simulator and from the firmware simulator |
+
+The model files are deliberately kept out of version control: together they are
+about 1.3 GB and four of them are over GitHub's 100 MB per-file limit. They are
+distributed through Printables, and every derived one can be regenerated from
+the upstream `full.stl` with the scripts in `tools/`.
+
+---
+
+## The lamp
+
+### Parts
+
+| Part | Notes |
+|---|---|
+| Raspberry Pi **Pico W** | The W matters — Wi-Fi is needed for the clock |
+| SK6812 **RGBW** strip | Roughly 1.35 m. The white channel keeps the moon white; RGB-only looks dirty on grey relief and draws about three times the current |
+| 5 V / 4 A supply | 40 RGBW LEDs draw 2.9 A at full white, far less in normal use |
+| 74AHCT125 level shifter | **Not optional** — the Pico drives 3.3 V, the strip expects 0.7 × VDD |
+| 330 Ω resistor | In series at the level shifter output |
+| 1000 µF capacitor | Across the supply at the first LED |
+| 3 momentary buttons | Optional — program, brighter, dimmer |
+
+At 33 mm pitch, **40 LEDs** fill the r = 209 mm ring: 1313 mm of circumference
+leaves a 26 mm gap at the seam. 39 would leave a visible 59 mm.
+
+Feed 5 V in at **two points**, at the seam and opposite it. That halves the
+copper path from 1.31 m to 0.65 m; otherwise the far side is visibly warmer in
+white. Pico and strip grounds must be connected.
+
+### Programs
+
+| | | |
+|---|---|---|
+| P0 | Demo | Every state at speed, one lunation per minute. Needs neither network nor clock |
+| P1 | Moon phase | The current phase, visible around the clock |
+| P2 | Real moon | Like P1, but only while the moon is actually above your horizon; brightness and colour follow its altitude |
+| P3 | Colour cycle | Full moon with a slowly drifting hue |
+| P4 | Night light | The dimmest warm white the hardware can hold across the whole ring |
+| P5 | Manual | Azimuth, illuminated fraction and warmth by hand |
+
+Earthshine on the dark side is simulated as well, and a red moon can be
+scheduled for eclipse dates.
+
+### Setting it up
+
+On first boot the Pico opens its own Wi-Fi network and serves a setup page —
+no cable needed after flashing. After that there is a web interface for
+program, brightness, earthshine, ring geometry and output mode.
+
+```bat
+python -m pip install mpremote
+
+REM copy the code, then configure from a phone
+python firmware\tools\provision.py --port COM5
+
+REM or preset everything right away
+python firmware\tools\provision.py --port COM5 --ssid MyNetwork ^
+    --password secret --lat 51.2 --lon 6.8 --leds 40
+```
+
+Details, wiring and the full parameter list: [firmware/README.md](firmware/README.md).
+
+---
+
+## Regenerating the models
+
+```bat
+REM dome the flat relief
+python tools\dome_moon.py --height 20 --cone 1 --out full_domed_H20_konisch.stl
+
+REM pocket, cable channels, and split into halves and quarters
+blender --background --python tools\blender_split.py -- --plug-radius 2.5
+
+REM verify: watertight, wall thickness, volume, radial profile
+python tools\check_stl.py full_domed_H20_konisch.stl
+```
+
+Every parameter is exposed, so the dome height, profile and LED height can be
+retuned without touching the code. [tools/README.md](tools/README.md) documents
+what each one does and records the measurements behind the defaults.
+
+---
+
+## Tests
+
+Everything that does not need hardware is tested on a PC:
+
+```bat
+python firmware\tests\test_ephemeris.py   REM astronomy against known quantities
+python firmware\tests\test_render.py      REM arc shape, colour, dithering
+python firmware\tests\test_system.py      REM time zones, config, PIO bit timing
+python firmware\tests\test_web.py         REM HTTP parsing, form and route consistency
+```
+
+The ephemeris is checked against equinoxes and solstices, the synodic month,
+perigee and apogee distances, and the fact that a full moon culminates at
+midnight. Long-term drift over 20 years is 0.01 days per lunation.
+
+---
+
+## Status
+
+* The firmware runs on real hardware. Wi-Fi, the web interface, the PIO driver
+  and the buttons all work.
+* **Temporal dithering over DMA** is implemented but has not been field-tested.
+  It is off by default and the lamp falls back to the blocking output path if
+  DMA is unavailable.
+* `firmware/README.md` and `tools/README.md` are still in German and carry a
+  few stale numbers from before the LED pitch changed. Translation is pending.
+* There is no over-the-air update yet; new code goes in over USB.
+
+---
+
+## License
+
+Two licenses, because this repository holds two different kinds of work:
+
+* **Software** (`firmware/`, `tools/`) — [MIT](LICENSE).
+* **Models** (`cad/`, `models/`) — [CC BY-NC-SA 4.0](LICENSE-MODELS.md),
+  inherited from the original design.
+
+The lamp is a remix of **Illuminated Moon Wall Lamp** by
+[DazedDice](https://www.printables.com/@DazedDice), by way of the
+[remix](https://www.printables.com/model/1015789-illuminated-moon-wall-lamp-remix)
+by [deimosfr](https://www.printables.com/@deimosfr_1155564). Full attribution
+in [LICENSE-MODELS.md](LICENSE-MODELS.md).

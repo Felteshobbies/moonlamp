@@ -17,7 +17,7 @@ derivative to carry it forward.
 |---|---|
 | Original design | **Illuminated Moon Wall Lamp** by [DazedDice](https://www.printables.com/@DazedDice) — [Printables 941311](https://www.printables.com/model/941311-illuminated-moon-wall-lamp) |
 | Remix this work starts from | **Illuminated Moon Wall Lamp (Remix)** by [deimosfr](https://www.printables.com/@deimosfr_1155564) — [Printables 1015789](https://www.printables.com/model/1015789-illuminated-moon-wall-lamp-remix) |
-| This work | Domed moon relief, revised frame, click system and mounting brackets by Detlef Wilmsen |
+| This work | Domed moon relief, revised frame, click system and mounting brackets by Felteshobbies |
 
 The moon relief itself originates from NASA/Goddard Space Flight Center lunar
 elevation data, as used in the original design.

@@ -1,322 +1,392 @@
-# Mondlampe — Firmware für Raspberry Pi Pico W
+# Moon Lamp — firmware for the Raspberry Pi Pico W
 
-Steuert einen SK6812-RGBW-Ring im Rahmen der gewölbten Mondlampe. Berechnet die
-echte Mondphase aus NTP-Zeit, bildet sie auf Lichtbogen und Farbe ab und lässt
-sich über drei Taster oder eine Weboberfläche bedienen.
+Drives an SK6812 RGBW ring inside the frame of the domed moon lamp. It computes
+the real moon phase from NTP time, maps it to an arc of light and a colour, and
+is controlled either by three buttons or from a browser.
 
-> **Nicht auf Hardware getestet.** Ich hatte beim Schreiben keinen Pico zur
-> Verfügung. Astronomie, Bildaufbau, Dithering, Zeitzone und Konfiguration sind
-> dagegen reines Python und am PC gegen bekannte Größen geprüft — siehe
-> [Tests](#tests). Ungetestet sind die MicroPython-spezifischen Teile:
-> PIO-Treiber, WLAN, Taster-GPIO, HTTP-Server.
+> **State of things.** The lamp runs: Wi-Fi, the web interface, the PIO driver
+> and the buttons all work on real hardware. The astronomy, frame composition,
+> dithering, time zone handling and configuration are plain Python and are
+> checked on a PC against known quantities — see [Tests](#tests). The one part
+> that has not been through a field test is **temporal dithering over DMA**;
+> it is off by default and falls back safely.
 
 ---
 
 ## Hardware
 
-| Teil | Wert |
+| Part | Value |
 |---|---|
-| Controller | Raspberry Pi Pico **W** (WLAN wird für NTP gebraucht) |
-| LED-Streifen | SK6812 RGBW, GRBW-Reihenfolge, 30 mm Teilung |
-| LED-Zahl | 44 auf dem Ring (r = 209 mm, Umfang 1313 mm, 8,2° pro LED) |
-| Pegelwandler | 74AHCT125 oder 74AHCT14 — **zwingend** |
-| Datenleitung | 330 Ω in Reihe, direkt am Pegelwandler |
-| Puffer | 1000 µF über die Streifenversorgung an der ersten LED |
-| Netzteil | 5 V/5 A bei SK6812 (44 × 4 × 18 mA ≈ 3,2 A) |
+| Controller | Raspberry Pi Pico **W** (Wi-Fi is needed for NTP) |
+| LED strip | SK6812 RGBW, GRBW byte order, 33 mm pitch |
+| LED count | 40 on the ring (r = 209 mm, 1313 mm circumference, 9° per LED) |
+| Level shifter | 74AHCT125 or 74AHCT14 — **mandatory** |
+| Data line | 330 Ω in series, right at the level shifter |
+| Buffer | 1000 µF across the strip supply at the first LED |
+| Power supply | 5 V / 4 A (40 × 4 × 18 mA ≈ 2.9 A at full white) |
 
-**Der Pegelwandler ist kein Luxus.** Der Pico gibt 3,3 V aus, die WS28xx-Familie
-will als High-Pegel etwa 0,7 × VDD. Ohne Wandler läuft es oft — aber
-temperaturabhängig und unzuverlässig.
+At 33 mm pitch, 40 LEDs leave a 26 mm gap at the seam. 39 would leave a visible
+59 mm, so 40 is the count the ring wants.
 
-Bei 5 V **an zwei Stellen einspeisen**: am Stoß und am gegenüberliegenden Punkt
-des Rings. Das halbiert den Kupferweg von 1,31 m auf 0,65 m, sonst wird die
-abgewandte Seite im Weiß sichtbar wärmer.
+**The level shifter is not a luxury.** The Pico outputs 3.3 V, and the WS28xx
+family wants roughly 0.7 × VDD for a logic high. Without one it often works —
+but temperature-dependently and unreliably. This is the single most common
+reason a rebuild misbehaves.
 
-Masse von Pico und Streifen zwingend verbinden.
+Feed 5 V in at **two points**: at the seam and at the opposite point of the
+ring. That halves the copper path from 1.31 m to 0.65 m; otherwise the far side
+is visibly warmer in white.
 
-### Standardbelegung (in `config.json` änderbar)
+The Pico and the strip must share a ground connection.
+
+### Default pin assignment (changeable in `config.json`)
 
 | Signal | GPIO |
 |---|---|
-| LED-Daten | 16 |
-| Taster Programm | 12 |
-| Taster heller | 13 |
-| Taster dunkler | 14 |
+| LED data | 16 |
+| Button: program | 12 |
+| Button: brighter | 13 |
+| Button: dimmer | 14 |
 
-Taster gegen Masse, interne Pull-ups sind aktiv — keine externen Widerstände nötig.
+Buttons switch to ground; the internal pull-ups are enabled, so no external
+resistors are needed.
 
 ---
 
 ## Installation
 
-MicroPython für den Pico W flashen (UF2 von micropython.org), dann:
+Flash MicroPython for the Pico W first (UF2 from micropython.org), then:
 
 ```bat
 python -m pip install mpremote
 
-REM Nur Code kopieren, Einrichtung danach am Handy
+REM Copy the code only, configure from a phone afterwards
 python firmware\tools\provision.py --port COM5
 
-REM Oder alles gleich vorbelegen
+REM Or preset everything right away
 python firmware\tools\provision.py --port COM5 ^
-    --ssid MeinWLAN --password geheim ^
-    --lat 51.2 --lon 6.8 --utc-offset 1
+    --ssid MyNetwork --password secret ^
+    --lat 51.2 --lon 6.8 --utc-offset 1 --leds 40
 ```
 
-### Erstkonfiguration am Handy
+### First-time setup from a phone
 
-Ohne gültige WLAN-Daten — oder wenn beim Einschalten die **Programmtaste
-gehalten** wird — spannt der Pico ein eigenes Netz auf:
+With no valid Wi-Fi credentials — or when the **program button is held** during
+power-up — the Pico opens a network of its own:
 
-1. Mit dem WLAN `Mondlampe-Setup` verbinden
-2. `http://192.168.4.1` aufrufen
-3. Formular ausfüllen, speichern, die Lampe startet neu
+1. Join the Wi-Fi network `Moon Lamp Setup`
+2. Open `http://192.168.4.1`
+3. Fill in the form and save; the lamp restarts
 
-Der Ring atmet währenddessen langsam blau, damit der Zustand erkennbar ist.
+The ring breathes slowly in blue while this is going on, so the state is
+recognisable across the room.
 
-Nach dem Verbinden blinkt die **letzte Stelle der IP-Adresse** als Lichtpunkte
-auf dem Ring — so findet man die Lampe auch ohne Router-Oberfläche. Der Hostname
-wird per DHCP gesetzt; `mondlampe.local` funktioniert je nach Router, unter
-Windows ohne Bonjour oft nicht.
+Once connected, the **last octet of the IP address** is blinked out as points of
+light on the ring — that way the lamp can be found without opening the router's
+interface. The hostname is set over DHCP; whether `moonlamp.local` resolves
+depends on your router, and on Windows without Bonjour it usually does not.
 
 ---
 
-## Bedienung
+## Controls
 
-| Taste | kurz | lang |
+| Button | Short press | Long press |
 |---|---|---|
-| Programm | nächstes Programm, quittiert durch N Lichtpunkte | Kalibrierung des Winkel-Offsets |
-| heller | eine Helligkeitsstufe hoch | |
-| dunkler | eine Stufe runter | |
+| Program | Next program, acknowledged by N points of light | Calibrate the angle offset |
+| Brighter | One brightness step up | |
+| Dimmer | One step down | |
 
-Helligkeitsstufen: 0,3 % / 1 % / 3 % / 10 % / 30 % / 100 %. Logarithmisch, weil
-linear unten unbrauchbar und oben verschwendet wäre.
+Brightness steps: 9 % / 15 % / 25 % / 40 % / 65 % / 100 %, in *perceived*
+brightness. They are spaced perceptually rather than linearly, because a linear
+scale is unusable at the bottom and wasteful at the top.
 
-### Winkel-Offset kalibrieren
+The lowest step is set by the hardware, not by taste. With 8 bits per channel,
+the dimmest level at which *every* LED still lights is one count — 1/255 of the
+light, which is 9 % perceived. Below that the ring does not get dimmer, it
+thins out into isolated lit pixels.
 
-Wo Pixel 0 nach dem Kleben physisch sitzt, weiß nur der, der geklebt hat. Ohne
-diesen Wert zeigt die Sichel in die falsche Richtung.
+### Calibrating the angle offset
 
-Programmtaste lang drücken → ein einzelner Punkt leuchtet. Mit heller/dunkler
-dreht er sich um den Ring. Auf **unten** stellen, Programmtaste erneut drücken.
-Gespeichert wird 10 s später (Flash-Schonung).
+Where pixel 0 physically ended up after gluing is known only to whoever glued
+it. Without that value the crescent points the wrong way.
 
-### Programme
+Angles are measured looking at the lamp from the front: **0° is the right-hand
+side, 90° the top, 180° the left, 270° the bottom.** The default is 270°,
+because the cable channel leaves at the bottom and the strip's closing gap is
+least visible there.
 
-| | Name | Braucht Netz | Braucht Standort |
+Long-press the program button, or use "Find the angle" in the browser. A single
+point lights up: the LED that the current setting believes sits at the **bottom**
+of the ring. Step it with brighter/dimmer, or with the ±1 LED buttons on the
+page, until the lit LED really is at the bottom — then the angle is correct.
+Press the program button again to leave. The value is written 10 s later, to
+spare the flash.
+
+This deliberately does not require you to know which physical LED is number 0,
+which is the normal situation once the strip is in the frame.
+
+### Programs
+
+| | Name | Needs network | Needs location |
 |---|---|---|---|
-| P0 | Demo — alle Zustände im Zeitraffer, Lunation in 60 s | nein | nein |
-| P1 | Mondphase — Echtzeitphase, immer sichtbar | ja | nein |
-| P2 | Echter Mond — nur wenn er wirklich am Himmel steht | ja | ja |
-| P3 | Farbwechsel — Vollmond mit wanderndem Farbton | nein | nein |
-| P4 | Nachtlicht — warmes Restlicht, ganzer Ring | nein | nein |
-| P5 | Manuell — Azimut, Phase und Farbe über die Weboberfläche | nein | nein |
+| P0 | Demo — every state at speed, one lunation in 60 s | no | no |
+| P1 | Moon phase — live phase, always visible | yes | no |
+| P2 | Real moon — only while it is actually in the sky | yes | yes |
+| P3 | Colour cycle — full moon with a drifting hue | no | no |
+| P4 | Night light — warm residual light, whole ring | no | no |
+| P5 | Manual — azimuth, phase and colour from the browser | no | no |
 
-**P2** blendet mit der Mondhöhe auf (unter −2° aus, ab +8° voll), färbt tief
-stehenden Mond wärmer und dunkler, hoch stehenden kühler, und dimmt bei
-Tageslicht auf 8 % — der Mond steht tagsüber oft am Himmel, ist dann aber kaum
-zu sehen.
+**P2** fades in with the moon's altitude (off below −2°, full from +8°), makes a
+low moon warmer and dimmer and a high one cooler, and dims to 8 % in daylight —
+the moon is often up during the day but hardly visible then.
 
-Ohne Netz oder ohne Zeit fällt P1 und P2 auf den Demomodus zurück, statt dunkel
-zu bleiben.
+With no network or no clock, P1 and P2 fall back to demo mode rather than
+sitting dark.
 
-**Roter Mond:** Finsternistermine als Datumsliste `"YYYY-MM-DD"` unter
-`eclipses` in die `config.json` eintragen. Echte Finsternisse zu rechnen wäre auf
-dem Pico machbar, träte aber selten auf; die Rötung bei Horizontnähe in P2
-passiert dagegen jede Nacht und nutzt den RGBW-Streifen genauso.
+**Red moon:** list eclipse dates as `"YYYY-MM-DD"` strings under `eclipses` in
+`config.json`. Computing real eclipses would be feasible on the Pico but would
+fire rarely; the reddening near the horizon in P2 happens every night and uses
+the RGBW strip in exactly the same way.
 
 ---
 
-## Wie es funktioniert
+## How it works
 
 ```
 config.json  ──┐
-NTP ── Zeit ───┤
-               ├──► Ephemeride ──► Programm ──► Renderer ──► Dither ──► PIO ──► SK6812
-Taster ────────┤     Phase,        P0…P5       44 Pixel     8 Bit
-HTTP ──────────┘     Höhe                      16 Bit
+NTP ── time ───┤
+               ├──► ephemeris ──► program ──► renderer ──► dither ──► PIO ──► SK6812
+buttons ───────┤    phase,        P0…P5       40 pixels    8 bit
+HTTP ──────────┘    altitude                  16 bit
 ```
 
-### Ephemeride (`lib/moonlight/ephemeris.py`)
+### Ephemeris (`lib/moonlight/ephemeris.py`)
 
-Keplerbahn plus die größten Störterme nach Paul Schlyter. Genauigkeit rund
-2 Bogenminuten, gemessene Langzeitdrift **−0,01 Tage in 20 Jahren**.
+A Kepler orbit plus the largest perturbation terms, after Paul Schlyter.
+Accuracy is around 2 arcminutes; measured long-term drift is **0.01 days per
+lunation over 20 years**.
 
 ### Renderer (`lib/moonlight/render.py`)
 
-Das Kernstück ist `ARC_TABLE`: welcher Lichtbogen welchen scheinbaren
-Beleuchtungsgrad erzeugt. Diese Tabelle ist **nicht geraten**, sondern am
-Höhenfeld des echten Reliefs ausgemessen (`tests/calibrate_arc.py`) und trifft
-den Zielwert über den ganzen Bereich auf ±0,005.
+The heart of it is `ARC_TABLE`: which arc of light produces which apparent
+illuminated fraction. That table is **not guessed**. It was measured on the
+height field of the real relief (`tests/calibrate_arc.py`) and hits the target
+value to ±0.005 across the whole range.
 
-Wichtig dabei: **echte Sicheln sind möglich.** Die Schattengrenze liegt bei jedem
-einzelnen Azimut zwar am Kuppelscheitel, also auf der Scheibenmitte — aber durch
-den 1/d²-Abfall ist die zugewandte Seite keineswegs gleichmäßig hell. Ein
-schmaler Bogen beleuchtet nur einen Keil am Rand, und der wirkt wie eine Sichel.
-Gemessen: 8° Bogen ergeben 9 % scheinbare Beleuchtung.
+An important finding: **real crescents are possible.** For any single azimuth
+the shadow boundary does sit at the summit of the dome, i.e. across the middle
+of the disc — but because of the 1/d² falloff the near side is far from evenly
+lit. A narrow arc lights only a wedge at the rim, and that reads as a crescent.
+Measured: an 8° arc gives 9 % apparent illumination.
 
-Die Bogenkanten sind weich, und die Rampe ist mindestens einen LED-Abstand breit.
-Sonst würde beim Weiterlaufen der Phase alle paar Stunden eine ganze LED hart
-dazuspringen — im Demomodus sähe man 44 Stufen statt einer wandernden Kante.
+The arc edges are soft, and the ramp is at least one LED pitch wide. Otherwise
+a whole LED would snap in every few hours as the phase advances — in demo mode
+you would see 40 discrete steps instead of a moving edge.
 
-**Erdschein:** die unbeleuchtete Seite ist genau die komplementäre Phase und wird
-von den gegenüberliegenden LEDs auf 1,8 % kühl angehoben. Das aschgraue
-Mondlicht ist ein reales Phänomen und das Einzige, was die Kuppelgeometrie nicht
-von selbst kann.
+**Earthshine:** the unlit side is exactly the complementary phase, and is
+lifted to 1.8 % coolly by the LEDs opposite. Ashen moonlight is a real
+phenomenon, and the one thing the dome geometry cannot produce by itself.
 
-**Farbe:** der W-Kanal trägt die Grundhelligkeit, RGB nur die Färbung. Aus RGB
-gemischtes Weiß wäre auf grauem Relief schmutzig und bräuchte etwa das Dreifache
-an Strom.
+**Colour:** the W channel carries the base brightness, RGB only the tint. White
+mixed from RGB would look dirty on grey relief and would draw roughly three
+times the current.
 
 ### Dithering (`lib/moonlight/dither.py`)
 
-Die interessantesten Zustände liegen ganz unten — Erdschein bei 1,8 %,
-Nachtlicht bei wenigen Prozent. Naiv auf 8 Bit gerundet landet man bei
-Zählerständen von 2 bis 5, wo die Stufen sichtbar werden und das Weiß beim
-Dimmen die Farbe wechselt.
+The most interesting states sit right at the bottom — earthshine at 1.8 %, the
+night light at a few percent. Rounded naively to 8 bits you land on counts of 2
+to 5, where the steps become visible and white shifts hue as it dims, because
+all four channels round differently.
 
-Statt zeitlichem Dithern bei hoher Bildrate (das bräuchte DMA: 44 Pixel × 32 Bit
-dauern 1,76 ms, bei 400 Hz wären das 70 % Rechenzeit) läuft hier **räumliches**
-Dithern entlang des Rings mit langsam wanderndem Startpunkt. Benachbarte LEDs
-beleuchten stark überlappende Bereiche der Mondscheibe — rundet man eine hoch und
-die nächste runter, mittelt sich das auf der Oberfläche weg, ganz ohne
-Zeitkomponente. Damit flimmert prinzipbedingt nichts, und 60 Hz genügen.
+The default is **spatial** dithering around the ring. Neighbouring LEDs
+illuminate heavily overlapping areas of the moon, so rounding one up and the
+next one down averages out on the surface with no time component at all. The
+state is rebuilt for every frame from a fixed starting index, which means a
+still image produces bit-identical output frame after frame — nothing can
+flicker, by construction, and 60 Hz is plenty.
 
-Gemessener Restfehler in den unteren Stufen: **0,02 statt 0,50 einer 8-Bit-Stufe.**
+Measured residual error at the low steps: **0.02 instead of 0.50 of an 8-bit
+step.**
 
-Sichtbar bliebe das Muster nur direkt vor den LEDs im äußersten Ring — und den
-verdeckt die Frontlippe des Rahmens ohnehin.
+Optionally, **temporal dithering** can be switched on from the Output section
+of the web page. It splits each frame into several subframes whose time average
+resolves finer than a single count, which buys about three extra bits exactly
+where they are needed, and makes individual LEDs fade in smoothly instead of
+snapping on. That needs the DMA output path: the CPU only starts the transfer
+and a DMA channel feeds the PIO FIFO, so the output costs no CPU time. If DMA
+cannot be set up the lamp says so and stays on the blocking path — the setting
+never takes the lamp down.
+
+The spatial pattern would only be visible right in front of the LEDs in the
+outermost ring, and the frame's front lip hides that anyway.
+
+### LED driver (`lib/moonlight/leds.py`)
+
+The PIO state machine generates the one-wire timing exactly and without jitter,
+whatever the CPU is doing. 12 PIO cycles per bit at 10 MHz gives T0H 0.30 /
+T0L 0.90 / T1H 0.60 / T1L 0.60 µs.
+
+The obvious shortcut is to reuse the WS2812B numbers, but the SK6812 wants a
+symmetric one bit; with WS2812B timing both halves sit outside the window, and
+the shortest pulse — the 0.25 µs high of a zero — is the first thing a marginal
+driver loses.
+
+The transmit FIFO is joined (`JOIN_TX`), doubling it from four words to eight.
+One word is one pixel and takes 38.4 µs to shift out, so the buffer grows from
+154 µs to 307 µs. That matters because the strip latches after 80 µs of idle:
+if the FIFO ever runs dry mid-frame, the remaining pixels are written to LED 0
+onwards and the first LEDs flash.
+
+On the blocking path the frame is pushed with interrupts disabled. That costs
+about a tenth of the CPU at 60 Hz and is invisible to Wi-Fi, whereas an
+underrun is immediately visible on the ring.
 
 ---
 
 ## Tests
 
-Alle laufen am PC mit CPython, ohne Pico:
+All of these run on a PC under CPython, with no Pico attached:
 
 ```bat
-python firmware\tests\test_ephemeris.py     REM Astronomie gegen bekannte Größen
-python firmware\tests\test_render.py        REM Bildaufbau, Farbe, Dithering
-python firmware\tests\test_system.py        REM Zeitzone, Konfiguration, Programme
+python firmware\tests\test_ephemeris.py     REM astronomy against known quantities
+python firmware\tests\test_render.py        REM frame composition, colour, dithering
+python firmware\tests\test_system.py        REM time zone, configuration, programs
+python firmware\tests\test_web.py           REM HTTP parsing, forms, routes
 ```
 
-`test_ephemeris.py` prüft unter anderem Tagundnachtgleichen und Sonnenwenden auf
-0,01° genau, die Perigäums-/Apogäumsdistanz, die Streuung der Lunationen gegen
-die reale Bandbreite 29,27–29,83 d, die Langzeitdrift über 40 Jahre, und dass
-der Vollmond um Mitternacht kulminiert.
+`test_ephemeris.py` checks, among other things, equinoxes and solstices to
+0.01°, perigee and apogee distances, the spread of lunations against the real
+range of 29.27–29.83 d, long-term drift over 20 years, and that a full moon
+culminates at midnight.
 
-Zwei Skripte brauchen zusätzlich numpy und die Werkzeuge aus `Moon/tools`:
+`test_system.py` also parses the PIO assembly and compares the literals in it
+against the timing constants in the same module, because `asm_pio()` runs its
+body in a namespace of its own where module-level names are invisible. The two
+therefore cannot drift apart unnoticed.
+
+Two more scripts additionally need numpy and the tools from `tools/`:
 
 ```bat
-python firmware\tests\calibrate_arc.py      REM ARC_TABLE neu ausmessen
-python firmware\tests\preview_firmware.py   REM Firmware-Ausgabe als Bild rendern
+python firmware\tests\calibrate_arc.py      REM re-measure ARC_TABLE
+python firmware\tests\preview_firmware.py   REM render the firmware output as an image
 ```
 
-`preview_firmware.py` schließt die Kette: echtes Datum → Ephemeride →
-`render.phase_frame()` → 44 RGBW-Werte → optisches Modell der Lampe → Bild. Was
-dort zu sehen ist, ist durchgerechnet, nicht illustriert.
+`preview_firmware.py` closes the loop: real date → ephemeris →
+`render.phase_frame()` → 40 RGBW values → optical model of the lamp → image.
+What you see there is computed, not illustrated.
 
 ---
 
-## Wenn etwas nicht geht
+## The browser interface
 
-| Symptom | Ursache |
+Once the lamp is on the network it is reachable at the IP that `status.py`
+reports, e.g. `http://192.168.178.58/`. The page refreshes itself every 30
+seconds and follows the light or dark system theme.
+
+It shows the running program, brightness, signal strength, IP, local time and
+date, the moon phase with its age and distance, and the moon's altitude above
+the horizon. You can set the program, the brightness step, the earthshine
+level, the ring geometry, the output mode, and manual mode P5 with its
+illuminated fraction, direction and warmth.
+
+Three device actions sit at the end of the page:
+
+| Link | Effect |
 |---|---|
-| Falsche Farben | Bytereihenfolge — `leds.py` schreibt GRBW; bei anderen Streifen dort tauschen |
-| Erste LEDs gehen, weiter hinten Müll | Pegelwandler fehlt oder Masse nicht verbunden |
-| Weiß wird zur abgewandten Seite hin gelblich | Spannungsabfall, zweite Einspeisung fehlt |
-| Sichel zeigt in die falsche Richtung | Winkel-Offset kalibrieren, ggf. `led_clockwise` umstellen |
-| Lampe bleibt im Demomodus | Keine NTP-Zeit — WLAN prüfen |
-| Portal kommt nicht | Programmtaste beim Einschalten gedrückt halten |
+| Find the angle | Starts the same mode as a long press on the program button |
+| Restart | Soft reset |
+| Forget Wi-Fi | Clears the credentials and reopens the setup portal |
 
-## Bedienoberflaeche im Browser
+The page computes nothing itself: `main.py` gathers the values in
+`build_info()` and hands them over ready-made, so that loading the page does
+not disturb the frame rate.
 
-Nach dem Einbuchen erreichbar unter der IP, die `status.py` nennt, z. B.
-`http://192.168.178.58/`. Die Seite aktualisiert sich alle 30 Sekunden selbst
-und passt sich dem hellen bzw. dunklen Systemdesign an.
-
-Angezeigt werden: laufendes Programm, Helligkeit, Signalstaerke, IP, Ortszeit
-und Datum, Mondphase mit Alter und Entfernung sowie die Hoehe des Mondes ueber
-dem Horizont. Bedienen lassen sich Programmwahl, Helligkeitsstufe und der
-Manuellmodus P5 mit Beleuchtungsgrad, Richtung und Waerme.
-
-Drei Geraeteaktionen sitzen am Seitenende:
-
-| Link | Wirkung |
-|---|---|
-| Winkel kalibrieren | startet denselben Modus wie langes Druecken der Programmtaste |
-| Neu starten | Softreset |
-| WLAN vergessen | loescht die Zugangsdaten und oeffnet wieder das Einrichtungsportal |
-
-Die Seite rechnet selbst nichts: `main.py` sammelt die Werte in `build_info()`
-und reicht sie fertig weiter, damit ein Seitenaufruf die Bildrate nicht stoert.
-
-Zum Anpassen des Aussehens ohne Geraet liegt ein gerendertes Muster in
+For tweaking the appearance without a device, a rendered sample sits in
 `tests/control_page_sample.html`.
 
-## Status auslesen
+---
+
+## Reading the status
 
 ```bat
-python firmware	ools\status.py            :: Port wird selbst gesucht
-python firmware	ools\status.py --scan     :: zusaetzlich Netze in Reichweite
+python firmware\tools\status.py            REM finds the port by itself
+python firmware\tools\status.py --scan     REM also lists networks in range
 ```
 
-Zeigt Konfiguration, WLAN-Status im Klartext, IP, Gateway, RSSI, die URL der
-Bedienoberflaeche und die gestellte Uhrzeit. Der Aufruf unterbricht kurz das
-laufende Programm und startet es danach neu (`--no-reset` unterdrueckt das).
+This prints the configuration, the Wi-Fi status in plain words, IP, gateway,
+RSSI, the URL of the control page and the clock that was set. The call briefly
+interrupts the running program and restarts it afterwards (`--no-reset`
+suppresses that).
 
-Die Statuscodes des CYW43 sind ohne Uebersetzung nicht zu gebrauchen:
+The CYW43 status codes are unusable without translation:
 
-| Code | Bedeutung |
+| Code | Meaning |
 |---|---|
-| `3` | IP erhalten, alles gut |
-| `-1` | Verbindung getrennt |
-| `-2` | Anmeldung laeuft &mdash; bleibt hier stehen, wenn die SSID nicht passt |
-| `-3` | Anmeldung abgelehnt, meist das Passwort |
-| `-4` | Netz nicht gefunden |
+| `3` | Got an IP, all good |
+| `-1` | Link down |
+| `-2` | Joining — stays here when the SSID does not match |
+| `-3` | Authentication failed, usually the password |
+| `-4` | Network not found |
 
-**WLAN-Namen sind gross-/kleinschreibungsempfindlich.** `zora` und `Zora` sind
-zwei verschiedene Netze. Tippt man sich im Portal dabei um, bleibt die Station
-auf `-2` stehen, was wie ein Passwortproblem aussieht. `connect()` erkennt das
-inzwischen selbst: findet es beim Scan ein Netz, das nur in der Schreibweise
-abweicht, korrigiert es die Konfiguration und verbindet erneut. Im REPL steht
-dann:
+**Wi-Fi names are case-sensitive.** `zora` and `Zora` are two different
+networks. Mistype that in the portal and the station sits at `-2`, which looks
+like a password problem. `connect()` now catches this itself: if the scan finds
+a network that differs only in spelling, it corrects the configuration and
+reconnects. The REPL then shows:
 
 ```
-WLAN: kein Erfolg, Status -2 (Anmeldung laeuft)
-WLAN: in Reichweite heisst das Netz 'Zora', nicht 'zora' -- korrigiere und speichere
-WLAN: verbunden als 192.168.178.58 , -36 dBm -> http://192.168.178.58/
+Wi-Fi: no luck, status -2 (joining)
+Wi-Fi: in range this network is called 'Zora', not 'zora' -- correcting and saving
+Wi-Fi: connected as 192.168.178.58 , -36 dBm -> http://192.168.178.58/
 ```
 
-Live mitlesen geht mit `mpremote connect COM5 repl` (mit Ctrl-D neu starten).
+To follow along live: `mpremote connect COM5 repl` (Ctrl-D restarts).
 
-## Wenn der Upload nicht klappt
+---
 
-`provision.py` prüft vorab, ob am Port überhaupt ein MicroPython-REPL antwortet,
-und nennt sonst den Grund. Der mit Abstand häufigste Fall bei einem neuen Board:
+## When something does not work
 
-**Auf dem Pico ist noch gar kein MicroPython.** Ein fabrikneuer oder mit dem
-C-SDK bespielter Pico meldet sich zwar am USB, hat aber keinen REPL, mit dem
-`mpremote` reden könnte. An der USB-Kennung lässt sich das ablesen:
-
-| USB-Kennung | Bedeutung |
+| Symptom | Cause |
 |---|---|
-| `2E8A:0003` | BOOTSEL-Modus, Laufwerk `RPI-RP2` |
-| `2E8A:0005` | **MicroPython** — nur damit funktioniert der Upload |
-| `2E8A:000A` | Programm mit dem C-SDK, kein MicroPython |
+| Wrong colours | Byte order — `leds.py` writes GRBW; swap there for other strips |
+| First LEDs fine, rubbish further along | Level shifter missing, or grounds not connected |
+| White turns yellowish towards the far side | Voltage drop, the second feed point is missing |
+| The first LEDs flash during updates | FIFO underrun — check that `JOIN_TX` is active and interrupts are disabled on the blocking path |
+| Crescent points the wrong way | Calibrate the angle offset, and check `led_clockwise` |
+| The lamp stays in demo mode | No NTP time — check Wi-Fi |
+| The portal does not appear | Hold the program button while powering up |
 
-MicroPython aufspielen:
+### When the upload does not work
 
-1. Pico vom USB trennen
-2. BOOTSEL gedrückt halten und dabei einstecken
-3. Laufwerk `RPI-RP2` erscheint. `INFO_UF2.TXT` darin nennt das Board, falls
-   unklar ist, welches gerade steckt
-4. `micropython/RPI_PICO_W-*.uf2` auf das Laufwerk kopieren
-5. Der Pico startet neu und meldet sich als `2E8A:0005`
+`provision.py` checks in advance whether a MicroPython REPL actually answers on
+the port, and names the reason if not. By far the most common case with a new
+board:
 
-Für WLAN zwingend die **W-Variante** (`RPI_PICO_W`, bei einem Pico 2 W
-`RPI_PICO2_W`) — ohne W fehlt der Funktreiber, und `import network` schlägt fehl.
+**There is no MicroPython on the Pico yet.** A factory-fresh board, or one
+flashed with the C SDK, does enumerate over USB but has no REPL for `mpremote`
+to talk to. The USB identifier gives it away:
 
-Angeschlossene Boards auflisten:
+| USB ID | Meaning |
+|---|---|
+| `2E8A:0003` | BOOTSEL mode, drive `RPI-RP2` |
+| `2E8A:0005` | **MicroPython** — the upload only works with this |
+| `2E8A:000A` | A program built with the C SDK, no MicroPython |
+
+Installing MicroPython:
+
+1. Unplug the Pico
+2. Hold BOOTSEL and plug it in while holding
+3. The drive `RPI-RP2` appears. `INFO_UF2.TXT` on it names the board, in case
+   it is unclear which one is plugged in
+4. Copy the `RPI_PICO_W-*.uf2` build onto the drive
+5. The Pico restarts and enumerates as `2E8A:0005`
+
+For Wi-Fi you need the **W variant** (`RPI_PICO_W`, or `RPI_PICO2_W` on a
+Pico 2 W) — without the W there is no radio driver and `import network` fails.
+The build this was developed against is `RPI_PICO_W-20260824-v1.29.0.uf2`; get
+it from [micropython.org/download](https://micropython.org/download/).
+
+List the attached boards:
 
 ```bat
 python -c "import serial.tools.list_ports as l; [print(p.device, hex(p.vid or 0), p.description) for p in l.comports()]"

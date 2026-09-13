@@ -12,6 +12,7 @@ try:
 except ImportError:
     import json
 
+from . import VERSION
 from . import config as configmod
 from . import programs
 
@@ -345,7 +346,8 @@ def control_page(cfg, info):
     out.append("<h2>Device</h2><div class='chips'>"
                "<a class='chip' href='/reboot'>Restart</a>"
                "<a class='chip warn' href='/forget'>Forget Wi-Fi</a></div>"
-               "<p class='hint'>This page refreshes every 30&nbsp;seconds.</p>")
+               "<p class='hint'>This page refreshes every 30&nbsp;seconds. "
+               "Firmware %s.</p>" % VERSION)
 
     return _PAGE % {"title": "Moon lamp", "body": "".join(out),
                     "head": "<meta http-equiv='refresh' content='30'>"}

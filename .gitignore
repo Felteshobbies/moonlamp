@@ -46,3 +46,6 @@ tools/
 preview/
 firmware/tests/calibrate_arc.py
 firmware/tests/preview_firmware.py
+
+# Built release archives -- attached to GitHub releases, not versioned
+dist/

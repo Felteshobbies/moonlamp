@@ -18,7 +18,7 @@ RP_VID = 0x2E8A
 MICROPYTHON_PID = 0x0005
 
 DEVICE_SNIPPET = '''
-import network, json, os
+import network, json, os, sys
 
 STATUS = {0: "IDLE", 1: "CONNECTING", 2: "WRONG_PASSWORD", 3: "GOT_IP",
           -1: "LINK_DOWN", -2: "LINK_JOIN", -3: "LINK_BADAUTH",
@@ -29,6 +29,14 @@ try:
     print("   ", sorted(os.listdir()))
 except Exception as e:
     print("    error:", e)
+
+print("Firmware")
+try:
+    sys.path.insert(0, "/lib")
+    from moonlight import VERSION
+    print("    Version   :", VERSION)
+except Exception as e:
+    print("    unknown, no moonlight package found:", e)
 
 print("Configuration")
 cfg = {}

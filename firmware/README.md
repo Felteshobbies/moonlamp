@@ -280,7 +280,7 @@ What you see there is computed, not illustrated.
 ## The browser interface
 
 Once the lamp is on the network it is reachable at the IP that `status.py`
-reports, e.g. `http://192.168.178.58/`. The page refreshes itself every 30
+reports, e.g. `http://192.0.2.42/`. The page refreshes itself every 30
 seconds and follows the light or dark system theme.
 
 It shows the running program, brightness, signal strength, IP, local time and
@@ -328,7 +328,7 @@ The CYW43 status codes are unusable without translation:
 | `-3` | Authentication failed, usually the password |
 | `-4` | Network not found |
 
-**Wi-Fi names are case-sensitive.** `zora` and `Zora` are two different
+**Wi-Fi names are case-sensitive.** `mynetwork` and `MyNetwork` are two different
 networks. Mistype that in the portal and the station sits at `-2`, which looks
 like a password problem. `connect()` now catches this itself: if the scan finds
 a network that differs only in spelling, it corrects the configuration and
@@ -336,8 +336,8 @@ reconnects. The REPL then shows:
 
 ```
 Wi-Fi: no luck, status -2 (joining)
-Wi-Fi: in range this network is called 'Zora', not 'zora' -- correcting and saving
-Wi-Fi: connected as 192.168.178.58 , -36 dBm -> http://192.168.178.58/
+Wi-Fi: in range this network is called 'MyNetwork', not 'mynetwork' -- correcting and saving
+Wi-Fi: connected as 192.0.2.42 , -36 dBm -> http://192.0.2.42/
 ```
 
 To follow along live: `mpremote connect COM5 repl` (Ctrl-D restarts).

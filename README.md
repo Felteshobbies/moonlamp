@@ -2,6 +2,8 @@
 
 A 3D-printed wall lamp that shows the **real, current phase of the moon**.
 
+**Printable files:** [Moon Wall Lamp with Moonphase Simulation](https://www.printables.com/model/1840057-moon-wall-lamp-with-moonphase-simulation)
+
 A ring of RGBW LEDs lights the moon relief from the side. The relief is domed —
 it rises 20 mm towards the centre — so light entering from one side is blocked
 from reaching the other. That turns a brightness gradient into an actual

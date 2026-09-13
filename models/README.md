@@ -5,10 +5,9 @@
 Git LFS would not help either: the free allowance is 1 GB of storage and 1 GB
 of traffic per month, which a handful of clones would exhaust.
 
-They are published on Printables instead, which is also where the license and
-the remix chain live:
+They are published on Printables instead:
 
-**[Illuminated Moon Wall Lamp — Remix](https://www.printables.com/model/1015789-illuminated-moon-wall-lamp-remix)**
+**[Moon Wall Lamp with Moonphase Simulation](https://www.printables.com/model/1840057-moon-wall-lamp-with-moonphase-simulation)**
 
 ## What you need to print
 

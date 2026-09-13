@@ -22,8 +22,8 @@ SOFTWARE.
 
 -------------------------------------------------------------------------------
 
-This license covers the SOFTWARE in this repository only: firmware/, tools/,
-and the documentation describing them.
+This license covers the SOFTWARE in this repository only: firmware/ and the
+documentation describing it.
 
 The 3D models -- everything under cad/ and models/ -- are derived from a
 Creative Commons licensed design and are covered by LICENSE-MODELS.md instead.

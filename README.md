@@ -34,8 +34,10 @@ be warmed and formed into it, which a spherical cap cannot.
 
 [dev]: https://en.wikipedia.org/wiki/Developable_surface
 
-Renders of the whole parameter study are in [`preview/optics/`](preview/optics/)
-— dome heights, LED heights, profile shapes and arc widths, side by side.
+Those figures come from an optical simulation of the real relief: the STL is
+rasterised into a height field, point lights are placed on the ring, and shadows
+are cast with a horizon sweep per LED. The dome height, the profile and the
+`ARC_TABLE` in the firmware were all chosen from that, not guessed.
 
 ---
 
@@ -44,15 +46,12 @@ Renders of the whole parameter study are in [`preview/optics/`](preview/optics/)
 | | |
 |---|---|
 | [`firmware/`](firmware/) | MicroPython for the Pico W: ephemeris, rendering, dithering, PIO LED driver, web interface |
-| [`tools/`](tools/) | Python scripts that warp, split and verify the STL, plus the optical simulator |
 | [`cad/`](cad/) | FreeCAD sources of the revised frame and the PrusaSlicer projects |
-| [`models/`](models/) | The STL files — **not in git**, see [models/README.md](models/README.md) |
-| [`preview/`](preview/) | Renders from the optical simulator and from the firmware simulator |
+| [`models/`](models/) | Where to get the printable files — **the STLs are not in git**, see [models/README.md](models/README.md) |
 
 The model files are deliberately kept out of version control: together they are
 about 1.3 GB and four of them are over GitHub's 100 MB per-file limit. They are
-distributed through Printables, and every derived one can be regenerated from
-the upstream `full.stl` with the scripts in `tools/`.
+distributed through Printables instead.
 
 ---
 
@@ -112,25 +111,6 @@ Details, wiring and the full parameter list: [firmware/README.md](firmware/READM
 
 ---
 
-## Regenerating the models
-
-```bat
-REM dome the flat relief
-python tools\dome_moon.py --height 20 --cone 1 --out full_domed_H20_konisch.stl
-
-REM pocket, cable channels, and split into halves and quarters
-blender --background --python tools\blender_split.py -- --plug-radius 2.5
-
-REM verify: watertight, wall thickness, volume, radial profile
-python tools\check_stl.py full_domed_H20_konisch.stl
-```
-
-Every parameter is exposed, so the dome height, profile and LED height can be
-retuned without touching the code. [tools/README.md](tools/README.md) documents
-what each one does and records the measurements behind the defaults.
-
----
-
 ## Tests
 
 Everything that does not need hardware is tested on a PC:
@@ -155,8 +135,6 @@ midnight. Long-term drift over 20 years is 0.01 days per lunation.
 * **Temporal dithering over DMA** is implemented but has not been field-tested.
   It is off by default and the lamp falls back to the blocking output path if
   DMA is unavailable.
-* `firmware/README.md` and `tools/README.md` are still in German and carry a
-  few stale numbers from before the LED pitch changed. Translation is pending.
 * There is no over-the-air update yet; new code goes in over USB.
 
 ---
@@ -165,7 +143,7 @@ midnight. Long-term drift over 20 years is 0.01 days per lunation.
 
 Two licenses, because this repository holds two different kinds of work:
 
-* **Software** (`firmware/`, `tools/`) — [MIT](LICENSE).
+* **Software** (`firmware/`) — [MIT](LICENSE).
 * **Models** (`cad/`, `models/`) — [CC BY-NC-SA 4.0](LICENSE-MODELS.md),
   inherited from the original design.
 

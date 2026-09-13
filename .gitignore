@@ -37,3 +37,12 @@ desktop.ini
 # Regenerate with tools/preview_moon.py and firmware/tests/preview_firmware.py.
 preview/optics/contact_sheet.html
 preview/firmware/firmware_preview.html
+
+# --- Not published ------------------------------------------------------------
+# The STL tooling and the simulation renders stay local. The scripts remain
+# useful for retuning the dome, but they are not part of the released project,
+# and preview/ was 20 of the repository's 22 MB.
+tools/
+preview/
+firmware/tests/calibrate_arc.py
+firmware/tests/preview_firmware.py

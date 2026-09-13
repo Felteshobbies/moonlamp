@@ -34,6 +34,6 @@ You may share and adapt these models, including printing them, as long as you
 
 ## The software is different
 
-`firmware/` and `tools/` are not derived from the models. They are original
-work under the [MIT license](LICENSE) and carry none of the restrictions above
-— commercial use of the software is explicitly allowed.
+The firmware is not derived from the models. It is original work under the
+[MIT license](LICENSE) and carries none of the restrictions above — commercial
+use of the software is explicitly allowed.

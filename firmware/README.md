@@ -264,16 +264,11 @@ against the timing constants in the same module, because `asm_pio()` runs its
 body in a namespace of its own where module-level names are invisible. The two
 therefore cannot drift apart unnoticed.
 
-Two more scripts additionally need numpy and the tools from `tools/`:
-
-```bat
-python firmware\tests\calibrate_arc.py      REM re-measure ARC_TABLE
-python firmware\tests\preview_firmware.py   REM render the firmware output as an image
-```
-
-`preview_firmware.py` closes the loop: real date → ephemeris →
-`render.phase_frame()` → 40 RGBW values → optical model of the lamp → image.
-What you see there is computed, not illustrated.
+`ARC_TABLE` in `render.py` is the one thing this suite does not re-derive.
+Reproducing it needs the STL of the relief, numpy, and the optical simulation
+it was measured with. What the tests do check is that the values behave: the
+arc grows monotonically with the illuminated fraction, the edges stay soft, and
+nothing jumps as the azimuth or the phase moves.
 
 ---
 

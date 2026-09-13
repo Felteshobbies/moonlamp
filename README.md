@@ -113,6 +113,10 @@ python firmware\tools\provision.py --port COM5 --ssid MyNetwork ^
 
 Details, wiring and the full parameter list: [firmware/README.md](firmware/README.md).
 
+It is no rocket science, but some experience with microcontrollers, electronics
+and the command line is helpful. A future release may include a one-click
+installer to make setup easier.
+
 ---
 
 ## Tests
@@ -140,6 +144,8 @@ midnight. Long-term drift over 20 years is 0.01 days per lunation.
   It is off by default and the lamp falls back to the blocking output path if
   DMA is unavailable.
 * There is no over-the-air update yet; new code goes in over USB.
+* Setup still runs through the command line. A one-click installer is on the
+  list for a future release.
 
 ---
 

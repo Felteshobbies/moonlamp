@@ -236,6 +236,77 @@ ok("P5 defaults to a plain white moon",
    frame[0][3] > 60000 and max(frame[0][:3]) == 0, str(frame[0]))
 
 print()
+print("8. Rainbow spreads the spectrum around the ring")
+
+cfg8 = dict(cfg)
+cfg8["led_count"] = 40
+
+# The point of P7 is that the LEDs differ from each other. Every other program
+# paints the ring one colour at a time, so this is the one thing to verify.
+frame = programs.rainbow(cfg8, 1.0, 0.0)
+distinct = len(set(frame))
+ok("every LED carries its own colour", distinct >= 30,
+   "%d distinct colours across %d LEDs" % (distinct, len(frame)))
+
+ok("no white is mixed in", all(px[3] == 0 for px in frame))
+ok("every LED is fully saturated", all(min(px[:3]) <= 1 for px in frame),
+   "worst %d" % max(min(px[:3]) for px in frame))
+
+# Neighbours must be close, or it is confetti rather than a rainbow
+worst = max(max(abs(a - b) for a, b in zip(frame[i], frame[(i + 1) % 40]))
+            for i in range(40))
+ok("neighbouring LEDs are close in colour", worst < 0.25 * render.FULL,
+   "largest neighbour step %d of %d" % (worst, render.FULL))
+
+# One full turn must come back to where it started, or it would jump each lap
+a = programs.rainbow(cfg8, 1.0, 0.0)
+b = programs.rainbow(cfg8, 1.0, programs.RAINBOW_PERIOD)
+ok("a full turn closes seamlessly", a == b)
+
+# Turning must actually move the pattern along the ring
+half = programs.rainbow(cfg8, 1.0, programs.RAINBOW_PERIOD / 2.0)
+ok("the pattern travels as time passes", half != a)
+
+# Hue follows the physical angle, so the wheel turns the same way round
+# whichever direction the strip happens to be wired
+# Pixel i sits at offset + i*pitch counter-clockwise and offset - i*pitch
+# clockwise, so reversing the wiring must mirror the pattern in index space
+# while leaving it identical in physical space.
+cw = programs.rainbow(dict(cfg8, led_clockwise=True), 1.0, 0.0)
+n = len(a)
+ok("reversed wiring mirrors the indices, not the physical colours",
+   all(cw[i] == a[(n - i) % n] for i in range(n)),
+   "first mismatch at %s" % next((i for i in range(n)
+                                  if cw[i] != a[(n - i) % n]), "none"))
+
+print()
+print("9. Manual mode reaches every channel on its own")
+
+for name, mix, want in (("red", (1.0, 0, 0, 0), 0),
+                        ("green", (0, 1.0, 0, 0), 1),
+                        ("blue", (0, 0, 1.0, 0), 2),
+                        ("white", (0, 0, 0, 1.0), 3)):
+    st = {"illum": 1.0, "waxing": True,
+          "r": mix[0], "g": mix[1], "b": mix[2], "w": mix[3]}
+    px = programs.manual(cfg8, 1.0, st)[0]
+    others = [v for i, v in enumerate(px) if i != want]
+    ok("%s alone lights only its own channel" % name,
+       px[want] > 60000 and max(others) == 0, str(px))
+
+# The complaint this came from: with White at 100 the colour sliders look dead,
+# because the white die is about as bright as the other three together. The
+# presets exist to make colour reachable in one click, so they must actually
+# turn white off.
+from moonlight import web as webmod                     # noqa: E402
+coloured = [(name, mix) for name, mix in webmod.MANUAL_PRESETS
+            if name != "White"]
+ok("every colour preset pulls White down",
+   all(mix[3] < 50 for _, mix in coloured),
+   ", ".join("%s W=%d" % (n, m[3]) for n, m in coloured))
+ok("there is still a preset for a plain white moon",
+   ("White", (0, 0, 0, 100)) in webmod.MANUAL_PRESETS)
+
+print()
 if FAILED:
     print("FAILED: %s" % ", ".join(FAILED))
     raise SystemExit(1)

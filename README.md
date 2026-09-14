@@ -92,6 +92,7 @@ white. Pico and strip grounds must be connected.
 | P4 | Night light | The dimmest warm white the hardware can hold across the whole ring |
 | P5 | Manual | Moon phase and an explicit red/green/blue/white mix, by hand |
 | P6 | Spectrum | The whole colour wheel at full saturation, one turn every seven minutes |
+| P7 | Rainbow | The entire spectrum around the ring at once, turning. Everything the strip can do |
 
 Earthshine on the dark side is simulated as well, and a red moon can be
 scheduled for eclipse dates.

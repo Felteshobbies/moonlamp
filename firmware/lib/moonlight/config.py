@@ -65,7 +65,7 @@ _RANGES = {
     "earthshine": (0.0, 0.2),
     "brightness": (0, len(BRIGHTNESS_STEPS) - 1),
     "subframes": (1, 16),
-    "program": (0, 6),
+    "program": (0, 7),
 }
 
 

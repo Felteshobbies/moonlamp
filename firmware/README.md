@@ -146,6 +146,7 @@ zero, which is the normal situation once the strip is in the frame.
 | P4 | Night light — warm residual light, whole ring | no | no |
 | P5 | Manual — phase and an RGBW mix from the browser | no | no |
 | P6 | Spectrum — the full colour range, very slowly | no | no |
+| P7 | Rainbow — the whole spectrum around the ring, turning | no | no |
 
 **P3 and P6** are the same idea at two strengths. P3 keeps white as the base
 and only tints it, so the disc still reads as a moon; one turn takes 90 s. P6
@@ -154,12 +155,26 @@ minutes for a turn — slow enough that you notice it has moved rather than watc
 it moving. The difference is the white share: P3 never drops below about 38 %
 white, P6 never rises above 10 %.
 
+**P7** is the one program that uses the ring as a ring: every LED carries a
+different hue and the wheel turns, twelve seconds to a lap. It only reads as a
+rainbow because of the dome — on a flat relief every LED washes across the
+whole disc and the colours sum to a muddy white, whereas the 20 mm rise keeps
+each LED's light on its own side. Hue follows the physical angle rather than
+the pixel index, so it turns the same way round whichever direction the strip
+was wired.
+
 **P5** gives you the four channels as sliders — red, green, blue and white
 separately, which is the only way to reach the W channel independently — plus
 the moon phase from 0 % (new) to 100 % (full) and the direction of the
 terminator. Overall brightness stays on the brightness steps, so the sliders
 only set the mix between channels. It starts on white alone, which is a plain
 white moon.
+
+Worth knowing before you reach for the sliders: **White is a separate LED**,
+and on an SK6812 it is roughly as bright as red, green and blue together. With
+White at 100 % the colour sliders barely do anything visible — the white simply
+swamps them. Pull it down first, or use the one-click mixes above the sliders,
+which do that for you.
 
 **P2** fades in with the moon's altitude (off below −2°, full from +8°), makes a
 low moon warmer and dimmer and a high one cooler, and dims to 8 % in daylight —

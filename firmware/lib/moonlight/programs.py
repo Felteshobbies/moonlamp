@@ -11,6 +11,7 @@ Python, so every program can be computed and rendered on a PC.
   P4  Night light  dimmest possible warm white across the whole ring
   P5  Manual       phase and an explicit RGBW mix from the web interface
   P6  Spectrum     the full colour range at saturation, very slowly
+  P7  Rainbow      the whole spectrum spread around the ring at once, turning
 """
 
 import math
@@ -18,10 +19,10 @@ import math
 from . import ephemeris as eph
 from . import render
 
-N_PROGRAMS = 7
+N_PROGRAMS = 8
 
 NAMES = ("Demo", "Moon phase", "Real moon", "Colour cycle", "Night light",
-         "Manual", "Spectrum")
+         "Manual", "Spectrum", "Rainbow")
 
 # P3 keeps white as the base and only tints it. 0.45 turned out too timid to
 # read as a colour change at all from across a room, so the coloured share is
@@ -35,6 +36,12 @@ CYCLE_PERIOD = 90.0         # seconds for one turn of the wheel
 # rather than watch it moving.
 SPECTRUM_PERIOD = 420.0     # seconds for one turn, seven minutes
 SPECTRUM_WHITE = 0.10
+
+# P7 turns fast enough to watch. It can, because nothing about it is meant to
+# look like the moon -- and because the whole wheel is on the ring at once, a
+# turn moves each colour by only one LED position rather than recolouring the
+# entire disc.
+RAINBOW_PERIOD = 12.0       # seconds for one full turn of the ring
 
 # Altitude above which the moon counts as risen. Slightly below zero, because
 # refraction lifts it at the horizon and the transition should be gradual.
@@ -160,6 +167,37 @@ def spectrum(cfg, level, t):
     return render.solid(cfg["led_count"], px)
 
 
+def rainbow(cfg, level, t):
+    """P7: the entire spectrum around the ring at once, slowly turning.
+
+    Everything else here paints the ring one colour at a time. This is the one
+    program that uses the ring as a ring -- and it only reads as a rainbow
+    because of the dome. On a flat relief every LED would wash across the whole
+    disc and the colours would sum to a muddy white; the 20 mm rise keeps each
+    LED's light on its own side, so the wheel lands on the surface as a wheel.
+
+    Hue follows the physical angle rather than the pixel index, so it turns the
+    same way round whichever direction the strip was wired.
+    """
+    n = cfg["led_count"]
+    lin = math.pow(_clamp(level), render.GAMMA)
+    turn = (t / RAINBOW_PERIOD) % 1.0
+    sign = -1.0 if cfg["led_clockwise"] else 1.0
+    offset = cfg["led_offset"]
+
+    frame = []
+    for i in range(n):
+        angle = offset + sign * 360.0 * i / n
+        hue = (turn + angle / 360.0) % 1.0
+        r, g, b = render.saturate(*render.wheel(hue))
+        # No white at all: this is the one place where a clean moon is not the
+        # point, and any white admixture only washes the colours out.
+        frame.append((int(lin * r * render.FULL),
+                      int(lin * g * render.FULL),
+                      int(lin * b * render.FULL), 0))
+    return frame
+
+
 def night_light(cfg, level):
     """P4: warm residual light across the whole ring."""
     # No extra dimming here: the brightness steps already reach down to a
@@ -209,4 +247,6 @@ def frame_for(program, cfg, d, level, t, manual_state=None, have_time=True):
         return manual(cfg, level, manual_state or {})
     if program == 6:
         return spectrum(cfg, level, t)
+    if program == 7:
+        return rainbow(cfg, level, t)
     return render.blank(cfg["led_count"])

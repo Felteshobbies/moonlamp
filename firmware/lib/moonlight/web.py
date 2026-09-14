@@ -208,6 +208,22 @@ DESCRIPTIONS = (
     "The dimmest possible warm white across the whole ring.",
     "Phase and colour by hand: four channel sliders and an illuminated fraction.",
     "The whole colour wheel at full saturation, one turn every seven minutes.",
+    "The entire spectrum around the ring at once, turning. Everything the strip can do.",
+)
+
+
+# One-click channel mixes for the manual mode, as (label, (r, g, b, w)) in
+# percent. They exist because four independent sliders starting at "white only"
+# give no hint that White has to come down before any colour is visible.
+MANUAL_PRESETS = (
+    ("White", (0, 0, 0, 100)),
+    ("Warm", (100, 30, 0, 45)),
+    ("Red", (100, 0, 0, 0)),
+    ("Amber", (100, 45, 0, 0)),
+    ("Green", (0, 100, 0, 0)),
+    ("Cyan", (0, 100, 100, 0)),
+    ("Blue", (0, 0, 100, 0)),
+    ("Magenta", (100, 0, 100, 0)),
 )
 
 
@@ -280,7 +296,14 @@ def control_page(cfg, info):
                      "value='%d'%s></label>" % (label, value, name,
                                                 value, _LIVE))
 
+    presets = ""
+    for label, mix in MANUAL_PRESETS:
+        presets += ("<a class='chip' href='/set?program=5&r=%d&g=%d&b=%d&w=%d'>"
+                    "%s</a>" % (mix[0], mix[1], mix[2], mix[3], label))
     out.append("<h2>Manual &mdash; switches to P5</h2>"
+               "<div class='chips'>%s</div>" % presets)
+
+    out.append(
                "<form action='/set'>"
                "<input type='hidden' name='program' value='5'>"
                "<label>Moon phase <output>%d&nbsp;%%</output>"
@@ -292,10 +315,13 @@ def control_page(cfg, info):
                "</select></label>"
                "%s"
                "<button type='submit'>Apply</button></form>"
-               "<p class='hint'>0&nbsp;%% is new moon, 100&nbsp;%% is full. The "
-               "four sliders set the colour directly; White alone is a plain "
-               "white moon. Overall brightness comes from the steps above, so "
-               "these only set the mix between the channels.</p>"
+               "<p class='hint'>0&nbsp;%% is new moon, 100&nbsp;%% is full. "
+               "Overall brightness comes from the steps above, so the sliders "
+               "only set the mix between channels.</p>"
+               "<p class='hint'><b>White is a separate LED</b>, and on an "
+               "SK6812 it is about as bright as red, green and blue together. "
+               "With White at 100&nbsp;%% the colours barely show &mdash; pull "
+               "it down to see them. The buttons above do that for you.</p>"
                % (m_illum, m_illum, _LIVE, "" if not waxing else " selected",
                   " selected" if not waxing else "", channels))
 

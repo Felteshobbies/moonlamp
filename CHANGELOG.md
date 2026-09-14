@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+* **P7 Rainbow**, a new program: the whole spectrum around the ring at once,
+  one turn every twelve seconds. The only program that uses the ring as a ring,
+  and it works because the dome keeps each LED's light on its own side.
+* **Manual mode gained one-click colour mixes.** The four sliders were correct
+  all along but looked dead: White starts at 100 %, and an SK6812's white die
+  is about as bright as the other three together, so raising Red changed almost
+  nothing visible. The presets pull White down, and the page now says why.
+
 * **An installer**, as a single executable. It takes a blank Pico from BOOTSEL
   to a running lamp -- MicroPython, firmware, Wi-Fi, location, pixel 0 -- and
   updates it afterwards from this repository's releases. It carries the

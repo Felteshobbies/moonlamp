@@ -42,8 +42,13 @@ preview/firmware/firmware_preview.html
 # The STL tooling and the simulation renders stay local. The scripts remain
 # useful for retuning the dome, but they are not part of the released project,
 # and preview/ was 20 of the repository's 22 MB.
-tools/
-preview/
+# Anchored with a leading slash on purpose. Unanchored, "tools/" matches every
+# directory of that name at any depth -- including firmware/tools/, where it
+# silently swallowed make_release.py. Files already tracked stay tracked, so
+# nothing broke until a release ran from a clean checkout and the script was
+# not there.
+/tools/
+/preview/
 firmware/tests/calibrate_arc.py
 firmware/tests/preview_firmware.py
 

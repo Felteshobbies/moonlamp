@@ -214,22 +214,47 @@ ok("mix clamps out-of-range weights",
 ok("mix at zero level is dark", render.mix(0.0, (1.0, 1.0, 1.0, 1.0))
    == (0, 0, 0, 0))
 
-# saturate() is what separates P6 from P3: the cosine wheel bottoms out at
-# 0.25, so without it every hue would stay pastel
-worst = 0.0
-for i in range(72):
-    r, g, b = render.saturate(*render.wheel(i / 72.0))
-    worst = max(worst, min(r, g, b))
-ok("saturate drives one channel to zero at every hue", worst < 1e-9,
-   "worst residual %.4f" % worst)
+# hue_rgb() is what makes a rainbow look seamless. Constant total power is the
+# whole point: the cosine wheel, saturated by taking out its common minimum,
+# gives the same hues but makes the six pure primaries a third dimmer than the
+# blends -- visible as bands around the ring and as a pulse while it turns.
+sums = [sum(render.hue_rgb(i / 360.0)) for i in range(360)]
+ok("total power is the same at every hue",
+   max(sums) - min(sums) < 1e-9,
+   "min %.4f, max %.4f" % (min(sums), max(sums)))
 
-# ... and it is worth doing: the raw wheel is fully saturated only at the six
-# hues where one lobe bottoms out, and washed out by up to 0.25 in between.
-mins = [min(render.wheel(i / 360.0)) for i in range(360)]
-ok("the raw wheel is pastel between those hues",
-   max(mins) > 0.2 and sum(mins) / len(mins) > 0.05,
-   "per-hue minimum up to %.2f, mean %.3f" % (max(mins),
-                                              sum(mins) / len(mins)))
+worst = max(min(render.hue_rgb(i / 360.0)) for i in range(360))
+ok("every hue is fully saturated", worst < 1e-9,
+   "worst residual on the darkest channel %.4f" % worst)
+
+# It has to be continuous, including across the wrap, or the ring would show a
+# seam where the wheel closes
+steps = []
+for i in range(360):
+    a = render.hue_rgb(i / 360.0)
+    b = render.hue_rgb((i + 1) / 360.0)
+    steps.append(max(abs(x - y) for x, y in zip(a, b)))
+# Each of the three segments spans a full 0..1 on one channel over a third of
+# the wheel, so the slope is exactly 3 and nothing may exceed it -- least of all
+# at the wrap, where a seam would show as a line across the ring.
+ok("the wheel is continuous all the way round, seam included",
+   max(steps) <= 3.0 / 360.0 + 1e-9, "largest step %.5f" % max(steps))
+
+ok("the three primaries land where they should",
+   render.hue_rgb(0.0) == (1.0, 0.0, 0.0)
+   and render.hue_rgb(1.0 / 3.0)[1] > 0.999
+   and render.hue_rgb(2.0 / 3.0)[2] > 0.999)
+
+# The plain cosine wheel keeps its own constant sum, which is why P3 never
+# needed this treatment
+# The plain cosine wheel keeps its own constant sum of 1.5, which is why P3
+# never needed this treatment. The ripple is not zero only because the 120
+# degree offsets are written to five digits; at 1e-5 of a channel it is some
+# nine orders of magnitude below one 8-bit count.
+wsums = [sum(render.wheel(i / 3600.0)) for i in range(3600)]
+ok("the cosine wheel P3 uses is already constant in power",
+   max(wsums) - min(wsums) < 1e-4,
+   "1.5 +/- %.1e" % ((max(wsums) - min(wsums)) / 2))
 
 # The manual colour must actually reach the frame
 frame = render.phase_frame(N, 1.0, True, 1.0, colour=(1.0, 0.0, 0.0, 0.0),

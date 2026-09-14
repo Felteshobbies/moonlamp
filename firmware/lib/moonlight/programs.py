@@ -159,7 +159,7 @@ def spectrum(cfg, level, t):
     """
     hue = (t / SPECTRUM_PERIOD) % 1.0
     lin = math.pow(_clamp(level), render.GAMMA)
-    r, g, b = render.saturate(*render.wheel(hue))
+    r, g, b = render.hue_rgb(hue)
     px = (int(lin * r * (1.0 - SPECTRUM_WHITE) * render.FULL),
           int(lin * g * (1.0 - SPECTRUM_WHITE) * render.FULL),
           int(lin * b * (1.0 - SPECTRUM_WHITE) * render.FULL),
@@ -189,7 +189,7 @@ def rainbow(cfg, level, t):
     for i in range(n):
         angle = offset + sign * 360.0 * i / n
         hue = (turn + angle / 360.0) % 1.0
-        r, g, b = render.saturate(*render.wheel(hue))
+        r, g, b = render.hue_rgb(hue)
         # No white at all: this is the one place where a clean moon is not the
         # point, and any white admixture only washes the colours out.
         frame.append((int(lin * r * render.FULL),

@@ -252,6 +252,13 @@ ok("no white is mixed in", all(px[3] == 0 for px in frame))
 ok("every LED is fully saturated", all(min(px[:3]) <= 1 for px in frame),
    "worst %d" % max(min(px[:3]) for px in frame))
 
+# The seamless part: no LED may be brighter than its neighbours just because of
+# its hue, or the ring shows bands and pulses as it turns
+powers = [sum(px[:3]) for px in frame]
+spread = (max(powers) - min(powers)) / float(max(powers))
+ok("every LED carries the same total power", spread < 0.01,
+   "%.1f %% variation around the ring" % (100 * spread))
+
 # Neighbours must be close, or it is confetti rather than a rainbow
 worst = max(max(abs(a - b) for a, b in zip(frame[i], frame[(i + 1) % 40]))
             for i in range(40))
@@ -274,10 +281,13 @@ ok("the pattern travels as time passes", half != a)
 # while leaving it identical in physical space.
 cw = programs.rainbow(dict(cfg8, led_clockwise=True), 1.0, 0.0)
 n = len(a)
+# Compared with a tolerance of one count: the two paths reach the same hue by
+# different arithmetic -- one adds a turn, the other subtracts it -- so the last
+# bit can differ before the cast to 16 bits.
+worst = max(max(abs(x - y) for x, y in zip(cw[i], a[(n - i) % n]))
+            for i in range(n))
 ok("reversed wiring mirrors the indices, not the physical colours",
-   all(cw[i] == a[(n - i) % n] for i in range(n)),
-   "first mismatch at %s" % next((i for i in range(n)
-                                  if cw[i] != a[(n - i) % n]), "none"))
+   worst <= 1, "largest difference %d of %d counts" % (worst, render.FULL))
 
 print()
 print("9. Manual mode reaches every channel on its own")

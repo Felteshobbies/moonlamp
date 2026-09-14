@@ -233,19 +233,32 @@ def mix(level, rgbw):
     return (out[0], out[1], out[2], out[3])
 
 
-def saturate(r, g, b):
-    """Push a colour to full saturation by taking out the common white.
+def hue_rgb(hue):
+    """Fully saturated colour at `hue` (0..1), with r + g + b always 1.
 
-    The cosine colour wheel is only fully saturated at the six hues where one
-    lobe bottoms out; everywhere in between all three channels stay lit, by up
-    to 0.25, and the colour reads as pastel. Subtracting the common minimum and
-    rescaling is what separates the full-range programme from the muted one.
+    A linear ramp red -> green -> blue -> red, which is what the Adafruit
+    strandtest wheel does and the reason that sketch looks smooth.
+
+    The obvious alternative -- saturating the cosine wheel by taking out its
+    common minimum -- produces the same hues but not the same brightness: the
+    six pure primaries come out a third dimmer than the blends between them.
+    Spread around a ring that shows up as light and dark bands, and as a pulse
+    while the wheel turns. Constant total power is what makes the gradient look
+    seamless.
+
+    Equal power is still not equal *perceived* brightness -- green reads
+    brighter than blue to the eye -- but correcting for that would make the
+    pure primaries uneven again, and this is the trade the familiar rainbow
+    makes too.
     """
-    m = min(r, g, b)
-    if m >= 1.0:
-        return (1.0, 1.0, 1.0)
-    k = 1.0 / (1.0 - m)
-    return ((r - m) * k, (g - m) * k, (b - m) * k)
+    seg = (hue % 1.0) * 3.0
+    i = int(seg)
+    f = seg - i
+    if i == 0:
+        return (1.0 - f, f, 0.0)
+    if i == 1:
+        return (0.0, 1.0 - f, f)
+    return (f, 0.0, 1.0 - f)
 
 
 def wheel(hue):

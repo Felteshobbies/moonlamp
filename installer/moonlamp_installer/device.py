@@ -47,7 +47,10 @@ CTRL_D = b"\x04"
 # Bytes of file content per submission. Base64 expands this by 4/3, and the
 # device holds one chunk plus its decoded form at once, so a few kB is the
 # sensible ceiling on a board with ~150 kB of free RAM.
-CHUNK = 1024
+#
+# Every chunk is a full round trip, so this is the main lever on transfer time:
+# the 87 kB of firmware takes 86 round trips at 1 kB and 22 at 4 kB.
+CHUNK = 4096
 
 
 class DeviceError(Exception):
@@ -247,6 +250,21 @@ class Pico(object):
 
     # -- protocol
 
+    def _pull(self):
+        """Read whatever the port has, blocking only until the first byte.
+
+        pyserial's read(n) waits for n bytes or the timeout, whichever comes
+        first -- it does not return early just because the device stopped
+        talking. Asking for a fixed 256 therefore costs the full timeout on
+        every single reply, because a reply is about ten bytes long. Over a
+        firmware transfer that is the difference between a second and ten
+        minutes.
+
+        So: take what is already waiting, and only block when nothing is.
+        """
+        waiting = getattr(self.ser, "in_waiting", 0)
+        return self.ser.read(waiting if waiting else 1)
+
     def _read_until(self, token, timeout=10.0):
         """Read up to and including `token`, keeping whatever followed it."""
         deadline = time.time() + timeout
@@ -259,7 +277,7 @@ class Pico(object):
             if time.time() > deadline:
                 raise DeviceError("timed out waiting for %r; got %r"
                                   % (token, self._buf[-120:]))
-            chunk = self.ser.read(256)
+            chunk = self._pull()
             if chunk:
                 self._buf += chunk
 

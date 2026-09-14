@@ -166,11 +166,24 @@ print("6. The REPL protocol, against a fake port")
 
 
 class FakeSerial(object):
-    """Answers like a MicroPython raw REPL, and records what was written."""
+    """Answers like a MicroPython raw REPL, and blocks the way pyserial does.
+
+    The blocking is the point. pyserial's read(n) waits for n bytes or for the
+    timeout, whichever comes first -- it does not return early just because the
+    device went quiet, so asking for more than is pending costs the full
+    timeout every time. `stalls` counts those and the test insists on zero:
+    the firmware transfer once took minutes instead of a second for exactly
+    this reason.
+    """
 
     def __init__(self, *a, **k):
         self.written = b""
         self.pending = b""
+        self.stalls = 0
+
+    @property
+    def in_waiting(self):
+        return len(self.pending)
 
     def write(self, data):
         self.written += data
@@ -182,6 +195,9 @@ class FakeSerial(object):
         return len(data)
 
     def read(self, n=1):
+        if n > len(self.pending):
+            # Where a real port would sit and wait out its timeout
+            self.stalls += 1
         out, self.pending = self.pending[:n], self.pending[n:]
         return out
 
@@ -200,7 +216,7 @@ sys.modules["serial"] = FakeSerialModule()
 
 pico = device.Pico("FAKE")
 pico.enter_raw()
-payload = bytes(bytearray(range(256))) * 9        # 2304 bytes, spans chunks
+payload = bytes(bytearray(range(256))) * 40       # 10 kB, spans several chunks
 pico.put(payload, "lib/moonlight/render.py")
 sent = pico.ser.written
 
@@ -224,6 +240,14 @@ ok("what arrives is byte-identical to what was sent", rebuilt == payload,
    "%d of %d bytes" % (len(rebuilt), len(payload)))
 ok("the file handle is closed and cleaned up",
    b"_f.close()" in sent and b"del _f" in sent)
+
+# The regression guard: no read may ask for more bytes than are already there
+ok("no read waits on bytes that are not coming", pico.ser.stalls == 0,
+   "%d blocking reads" % pico.ser.stalls)
+
+ok("a chunk is large enough to be worth its round trip", device.CHUNK >= 2048,
+   "%d bytes -> %d round trips for 87 kB"
+   % (device.CHUNK, (87 * 1024 + device.CHUNK - 1) // device.CHUNK))
 
 print()
 print("7. Board identification")

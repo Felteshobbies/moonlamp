@@ -9,6 +9,9 @@ moonlamp-installer              opens the window
 moonlamp-installer status       what is attached and what is on it
 moonlamp-installer install      flash and set up a board
 moonlamp-installer update       newest firmware, settings kept
+moonlamp-installer restart      restart the lamp, change nothing
+moonlamp-installer config       show the lamp's settings, change none
+moonlamp-installer version      what this build carries
 moonlamp-installer releases     what has been published
 ```
 
@@ -56,6 +59,10 @@ would otherwise take the lamp off the network on a stray save, and the mistake
 would only show up minutes later when the clock failed to set.
 
 `moonlamp-installer config` prints what is on the lamp and changes nothing.
+
+"Save and restart" restarts the lamp even when nothing needed writing. The
+button names two things, and one that quietly does neither is worse than one
+that does the harmless half.
 
 ## Why it does not use mpremote
 

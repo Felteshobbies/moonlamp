@@ -463,29 +463,34 @@ class App(object):
         # The form is pre-filled with defaults, and defaults are precisely what
         # must not reach a configured lamp just because someone pressed Save.
         settings = install.changed_settings(settings, self.loaded)
-        if not settings:
-            self.status.configure(text="Nothing changed, so nothing written.")
-            return
-        changed = ", ".join(sorted(settings))
-        if self.loaded and not messagebox.askyesno(
-                "Moon Lamp Installer",
-                "Write these settings and restart the lamp?\n\n%s\n\n"
-                "Everything else stays as it is." % changed):
-            return
 
-        self._busy("Writing the settings ...")
+        # Nothing to write still means the restart half of the button happens.
+        # It is called "Save and restart", and a button that silently does
+        # neither is worse than one that does the harmless half.
+        if settings:
+            changed = ", ".join(sorted(settings))
+            if self.loaded and not messagebox.askyesno(
+                    "Moon Lamp Installer",
+                    "Write these settings and restart the lamp?\n\n%s\n\n"
+                    "Everything else stays as it is." % changed):
+                return
+            self._busy("Writing the settings ...")
+        else:
+            self._busy("Nothing changed -- restarting the lamp ...")
 
         def job(report):
-            install.write_config(self.port, settings, report=report)
+            if settings:
+                install.write_config(self.port, settings, report=report)
             install.restart(self.port, report)
-            return True
+            return bool(settings)
 
-        def done(_, exc):
+        def done(wrote, exc):
             if exc:
                 return self._fail(exc)
             self.status.configure(
-                text="Saved. The lamp is restarting -- give it a few seconds, "
-                     "then press 'Find the lamp'.")
+                text=("Saved and restarting" if wrote
+                      else "Nothing needed writing, restarted anyway")
+                     + " -- give it a few seconds, then press 'Find the lamp'.")
 
         self.worker.run(job, done)
 

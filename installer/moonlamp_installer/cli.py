@@ -189,6 +189,17 @@ def cmd_releases(args):
     return 0
 
 
+def cmd_restart(args):
+    """Restart the lamp and change nothing else."""
+    port = args.port or device.find_repl_port()
+    if not port:
+        raise SystemExit("no board with MicroPython found")
+    install.restart(port, report)
+    print()
+    print("Restarted. Nothing on the lamp was changed.")
+    return 0
+
+
 def cmd_version(args):
     """What this build is and what it carries. Touches no hardware."""
     from . import VERSION
@@ -235,6 +246,9 @@ def build_parser():
     p.add_argument("--force", action="store_true",
                    help="reinstall even when nothing is newer")
     p.set_defaults(func=cmd_update)
+
+    p = sub.add_parser("restart", help="restart the lamp, change nothing")
+    p.set_defaults(func=cmd_restart)
 
     p = sub.add_parser("version", help="what this build carries")
     p.set_defaults(func=cmd_version)

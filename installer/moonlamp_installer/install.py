@@ -183,6 +183,26 @@ def read_config(port):
         pico.close()
 
 
+def changed_settings(wanted, current):
+    """Which of `wanted` actually differ from what the lamp already holds.
+
+    Compared as text, because a config.json round trip turns 40 into 40 and
+    270.0 into 270.0 but an entry field hands back "40" and "270.0". Comparing
+    the typed values would report every field as changed on every save.
+
+    An empty value is never a change: blank means "leave it", not "erase it".
+    That matters most for the password, where a stray save would otherwise take
+    the lamp off the network.
+    """
+    out = {}
+    for key, val in wanted.items():
+        if val is None or val == "":
+            continue
+        if str(current.get(key, "")) != str(val):
+            out[key] = val
+    return out
+
+
 def write_config(port, settings, merge=True, report=None):
     """Write config.json, keeping any keys the caller did not mention."""
     cfg = read_config(port) if merge else {}

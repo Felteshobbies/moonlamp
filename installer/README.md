@@ -43,6 +43,20 @@ The update path compares what is on the board against both the copy inside the
 installer and the newest release on GitHub, and offers whichever is newer.
 Settings are never touched by an update.
 
+### Settings are read before they are written
+
+The settings form is pre-filled with sensible defaults, and defaults are
+precisely what must not land on a lamp that is already configured. So the
+current `config.json` is read off the board as soon as one with firmware is
+found, the form shows those values, and **only fields you actually changed are
+written back**. A confirmation lists them by name before anything is sent.
+
+A blank field never means "erase this". That matters most for the password: it
+would otherwise take the lamp off the network on a stray save, and the mistake
+would only show up minutes later when the clock failed to set.
+
+`moonlamp-installer config` prints what is on the lamp and changes nothing.
+
 ## Why it does not use mpremote
 
 `provision.py` drives `mpremote` as a subprocess, which is fine from a source

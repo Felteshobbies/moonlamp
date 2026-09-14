@@ -306,6 +306,74 @@ finally:
     device.read_board_info = saved_info
 
 print()
+print("8. Existing settings are read before anything is written")
+
+# The form starts out holding defaults, and defaults are exactly what must not
+# reach a lamp that is already set up just because someone pressed Save.
+onboard = {"ssid": "MyNetwork", "password": "secret", "hostname": "moonlamp",
+           "latitude": 51.2, "longitude": 6.8, "utc_offset": 1,
+           "led_count": 40, "led_offset": 270.0}
+
+same = install.changed_settings(dict(onboard), onboard)
+ok("an unchanged form writes nothing at all", same == {}, str(same))
+
+# A config.json round trip yields 40 and 270.0; an entry field yields "40" and
+# "270.0". Compared as typed values, every field would look changed every time.
+as_text = {k: str(v) for k, v in onboard.items()}
+ok("values retyped as text are not mistaken for changes",
+   install.changed_settings(as_text, onboard) == {},
+   str(install.changed_settings(as_text, onboard)))
+
+one = dict(as_text, led_count="44")
+ok("a real change is picked up",
+   install.changed_settings(one, onboard) == {"led_count": "44"},
+   str(install.changed_settings(one, onboard)))
+
+# The case that would take the lamp off the network
+blanked = dict(as_text, password="")
+ok("a blank password is never written",
+   "password" not in install.changed_settings(blanked, onboard))
+ok("a blank field never erases anything",
+   install.changed_settings({"ssid": "", "hostname": ""}, onboard) == {})
+
+# And on a lamp with nothing on it, everything the user typed must get through
+fresh = install.changed_settings(as_text, {})
+ok("a blank lamp receives every field that was filled in",
+   sorted(fresh) == sorted(onboard), "%d fields" % len(fresh))
+
+# write_config merges, so keys nobody mentioned survive untouched
+import json                                            # noqa: E402
+written = {}
+
+
+class FakePico(object):
+    def __init__(self, port):
+        pass
+
+    def enter_raw(self):
+        pass
+
+    def put(self, data, remote):
+        written[remote] = json.loads(data.decode())
+
+    def close(self):
+        pass
+
+
+saved_pico, saved_read = device.Pico, install.read_config
+device.Pico = FakePico
+install.read_config = lambda port: dict(onboard)
+try:
+    install.write_config("FAKE", {"led_count": 44})
+    got = written.get("config.json", {})
+    ok("writing one setting leaves the rest of config.json alone",
+       got.get("ssid") == "MyNetwork" and got.get("password") == "secret"
+       and got.get("led_count") == 44,
+       "%d keys kept" % len(got))
+finally:
+    device.Pico, install.read_config = saved_pico, saved_read
+
+print()
 if FAILED:
     print("FAILED: %d checks -> %s" % (len(FAILED), ", ".join(FAILED)))
     raise SystemExit(1)

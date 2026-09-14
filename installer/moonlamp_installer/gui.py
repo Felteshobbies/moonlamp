@@ -96,6 +96,9 @@ class App(object):
         self.state = {}
         self.files = None
         self.chosen = None
+        # What the lamp actually holds, as last read. Empty means "unknown",
+        # which is treated as "write nothing you were not asked to write".
+        self.loaded = {}
 
         head = ttk.Frame(root)
         head.pack(fill="x", **PAD)
@@ -213,6 +216,10 @@ class App(object):
             if ready:
                 self.nb.select(self.tab_fw)
                 self.fw_refresh()
+                # Read the existing configuration straight away, so the
+                # settings form can never show defaults over real values
+                if state.get("firmware"):
+                    self.load_settings()
 
         self.worker.run(job, done)
 
@@ -356,20 +363,35 @@ class App(object):
         self.clock.current(6)               # 6 o'clock, the default
         self.clock.grid(row=i, column=1, sticky="ew", pady=3, padx=(10, 0))
 
+        self.origin = ttk.Label(f, wraplength=520, foreground="#666",
+                                justify="left", text="")
+        self.origin.pack(anchor="w", **PAD)
+
         ttk.Label(f, wraplength=520, foreground="#666", justify="left",
                   text="Read the rim like a clock face, looking at the lamp "
-                       "from the front. Leave Wi-Fi empty to set the lamp up "
-                       "from a phone instead: it opens a network called "
-                       "'Moon Lamp Setup'.").pack(anchor="w", **PAD)
+                       "from the front. Leave the password blank to keep the "
+                       "one already stored. Leave Wi-Fi empty altogether to "
+                       "set the lamp up from a phone instead: it opens a "
+                       "network called 'Moon Lamp Setup'.").pack(anchor="w",
+                                                                 **PAD)
 
         row = ttk.Frame(f)
         row.pack(fill="x", **PAD)
         ttk.Button(row, text="Save and restart",
                    command=self.do_settings).pack(side="left")
+        ttk.Button(row, text="Reload from lamp",
+                   command=self.load_settings).pack(side="left", padx=8)
         ttk.Button(row, text="Find the lamp",
                    command=self.do_find).pack(side="left", padx=8)
 
     def load_settings(self):
+        """Read what is on the lamp and show it, before anything is written.
+
+        The form starts out holding sensible defaults, and defaults are exactly
+        what must not reach a lamp that is already configured. So: read first,
+        remember what came back, and on save send only what the user actually
+        changed.
+        """
         if not self.port:
             return
 
@@ -377,8 +399,14 @@ class App(object):
             return install.read_config(self.port)
 
         def done(cfg, exc):
-            if exc or not cfg:
+            if exc:
+                self.loaded = {}
+                self.origin.configure(
+                    text="Could not read the current settings from the lamp. "
+                         "Saving now would write every field as shown.",
+                    foreground="#a33")
                 return
+            self.loaded = dict(cfg or {})
             for key, var in self.vars.items():
                 if cfg.get(key) not in (None, ""):
                     var.set(str(cfg[key]))
@@ -389,6 +417,15 @@ class App(object):
                     if h == hour:
                         self.clock.current(idx)
                         break
+            if cfg:
+                self.origin.configure(
+                    text="Showing the settings currently on the lamp. Only "
+                         "what you change is written back.",
+                    foreground="#666")
+            else:
+                self.origin.configure(
+                    text="The lamp has no settings yet, so these are defaults.",
+                    foreground="#666")
 
         self.worker.run(job, done)
 
@@ -399,7 +436,10 @@ class App(object):
         settings = {}
         for key, var in self.vars.items():
             val = var.get().strip()
-            if val == "" and key != "password":
+            if val == "":
+                # Blank never means "erase this". For the password that is the
+                # important case: the field starts empty, and a stray save
+                # would otherwise take the lamp off the network.
                 continue
             if key in ("latitude", "longitude"):
                 try:
@@ -418,6 +458,20 @@ class App(object):
             settings[key] = val
         hour = CLOCK_CHOICES[self.clock.current()][1]
         settings["led_offset"] = install.clock_to_angle(hour)
+
+        # Send only what actually differs from what the lamp already holds.
+        # The form is pre-filled with defaults, and defaults are precisely what
+        # must not reach a configured lamp just because someone pressed Save.
+        settings = install.changed_settings(settings, self.loaded)
+        if not settings:
+            self.status.configure(text="Nothing changed, so nothing written.")
+            return
+        changed = ", ".join(sorted(settings))
+        if self.loaded and not messagebox.askyesno(
+                "Moon Lamp Installer",
+                "Write these settings and restart the lamp?\n\n%s\n\n"
+                "Everything else stays as it is." % changed):
+            return
 
         self._busy("Writing the settings ...")
 

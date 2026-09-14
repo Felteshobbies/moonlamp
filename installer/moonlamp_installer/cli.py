@@ -161,6 +161,25 @@ def cmd_update(args):
     return 0
 
 
+def cmd_config(args):
+    """Show what is on the lamp, without changing any of it."""
+    port = args.port or device.find_repl_port()
+    if not port:
+        raise SystemExit("no board with MicroPython found")
+    cfg = install.read_config(port)
+    if not cfg:
+        print("  The lamp has no config.json yet.")
+        return 0
+    for key in sorted(cfg):
+        val = cfg[key]
+        if key == "password":
+            val = ("set, %d characters" % len(val)) if val else "empty"
+        elif key == "led_offset":
+            val = "%g deg -- %d o'clock" % (val, install.angle_to_clock(val))
+        print("  %-12s: %s" % (key, val))
+    return 0
+
+
 def cmd_releases(args):
     for rel in releases.list_releases(args.prereleases):
         mark = " (pre-release)" if rel["prerelease"] else ""
@@ -206,6 +225,9 @@ def build_parser():
     p.add_argument("--force", action="store_true",
                    help="reinstall even when nothing is newer")
     p.set_defaults(func=cmd_update)
+
+    p = sub.add_parser("config", help="show the lamp's settings, change none")
+    p.set_defaults(func=cmd_config)
 
     p = sub.add_parser("releases", help="what has been published")
     p.set_defaults(func=cmd_releases)

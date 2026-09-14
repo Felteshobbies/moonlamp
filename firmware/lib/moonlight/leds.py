@@ -47,6 +47,11 @@ T_HIGH = 3                              # high for a zero
 T_EXTRA = 3                             # additional high for a one
 RESET_US = 100                          # SK6812 latches after 80 us of idle
 
+# Frames a picture has to hold still before the subframes are built for it.
+# Long enough that a moving programme never pays the cost, short enough that a
+# settled one gets the benefit within a blink.
+SETTLE_FRAMES = 3
+
 PIO0_BASE = 0x50200000
 PIO_TXF0 = PIO0_BASE + 0x10
 
@@ -94,6 +99,11 @@ class Ring(object):
         self._idx = 0
         self._free_at = 0
         self._want_temporal = bool(temporal)
+        # How many of the buffers tick() is currently cycling. One while the
+        # picture is moving, the full set once it has settled -- see _plan().
+        self._active = 1
+        self._prev = None
+        self._stable = 0
 
         if not HAVE_PIO:
             return
@@ -140,6 +150,42 @@ class Ring(object):
         except Exception:
             return False
 
+    def _plan(self, frame16):
+        """Decide how many buffers this frame should be shown through.
+
+        Temporal dithering only works if the whole set of subframes is shown
+        well above flicker fusion. Building them costs six dithers, and on this
+        chip that is 32 ms against 13 ms for the picture itself -- so on a
+        moving programme the loop never finishes early, tick() runs once per
+        frame instead of dozens of times, and the six subframes end up being
+        shown for 50 ms each. That does not average, it strobes, and a drifting
+        rainbow lurches around the ring in thirds of a second.
+
+        The way out is not a cleverer schedule but a cheaper question: has the
+        picture stopped changing? A moon phase holds the same 16-bit frame for
+        minutes at a time, so the subframes get built once and then cycle for
+        as long as it lasts, which is exactly the case they help. Anything
+        moving gets a single dither -- no worse than the blocking path, and
+        still over DMA, so the CPU is not held with interrupts off.
+
+        Returns True when the buffers need rebuilding.
+        """
+        if frame16 != self._prev:
+            self._prev = frame16
+            self._stable = 0
+            if self._active != 1:
+                self._active = 1
+                self._idx = 0
+            return True
+        if self._stable < SETTLE_FRAMES:
+            self._stable += 1
+            if self._stable == SETTLE_FRAMES and self.n_sub > 1:
+                # It has held still long enough to be worth the six dithers
+                self._active = self.n_sub
+                self._idx = 0
+                return True
+        return False
+
     def tick(self):
         """Push the next subframe if the previous one is done.
 
@@ -156,7 +202,7 @@ class Ring(object):
             return False
         self.dma.config(read=self.bufs[self._idx], count=self.n, trigger=True)
         self._idx += 1
-        if self._idx >= self.n_sub:
+        if self._idx >= self._active:
             self._idx = 0
         # Transmission time plus the latch gap
         self._free_at = time.ticks_add(now, int(self.n * 32 * 1.2) + RESET_US)
@@ -179,9 +225,14 @@ class Ring(object):
         tick() then cycles through them fast enough to fuse.
         """
         if self.mode == "dma":
-            subs = dither.subframes(frame16, self.n_sub)
-            for j in range(self.n_sub):
-                self._pack(subs[j], self.bufs[j])
+            if self._plan(frame16):
+                if self._active > 1:
+                    subs = dither.subframes(frame16, self._active)
+                    for j in range(self._active):
+                        self._pack(subs[j], self.bufs[j])
+                else:
+                    self._pack(dither.dither_ring(frame16, dither.new_state(),
+                                                  0), self.bufs[0])
             self.tick()
             return
 
@@ -207,7 +258,9 @@ class Ring(object):
     def describe(self):
         """One line for the status page."""
         if self.mode == "dma":
-            return "DMA, %d subframes" % self.n_sub
+            if self._active > 1:
+                return "DMA, %d subframes" % self._active
+            return "DMA, single frame while the picture moves"
         if self.mode == "blocking":
             return "blocking" + (", DMA requested but unavailable"
                                  if self._want_temporal else "")

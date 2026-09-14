@@ -346,6 +346,50 @@ ok("there is still a preset for a plain white moon",
    ("White", (0, 0, 0, 100)) in webmod.MANUAL_PRESETS)
 
 print()
+print("10. Temporal dithering only engages once the picture holds still")
+
+from moonlight import leds                              # noqa: E402
+
+# Ring falls back to mode "off" without PIO, which is exactly what a PC is --
+# but _plan() is pure bookkeeping and is the part that got this wrong.
+ring = leds.Ring(pin=0, n_leds=8, temporal=True, n_subframes=6)
+ring.mode = "dma"
+
+still = [(100, 200, 300, 400)] * 8
+moving = [[(100 + k, 200, 300, 400)] * 8 for k in range(1, 8)]
+
+ok("the first frame always needs building", ring._plan(still))
+ok("it starts on a single buffer", ring._active == 1, str(ring._active))
+
+built = sum(1 for _ in range(leds.SETTLE_FRAMES) if ring._plan(still))
+ok("a still picture is rebuilt exactly once, as subframes", built == 1,
+   "%d rebuilds" % built)
+ok("and then cycles the whole set", ring._active == 6, str(ring._active))
+ok("holding still costs nothing further",
+   not any(ring._plan(still) for _ in range(20)))
+
+# The case that made the rainbow lurch: every frame different
+ring2 = leds.Ring(pin=0, n_leds=8, temporal=True, n_subframes=6)
+ring2.mode = "dma"
+rebuilds = sum(1 for f in moving if ring2._plan(f))
+ok("a moving picture rebuilds every frame", rebuilds == len(moving),
+   "%d of %d" % (rebuilds, len(moving)))
+ok("but never pays for subframes while it moves", ring2._active == 1,
+   "%d buffers" % ring2._active)
+
+# Settling and then moving again must drop back, or tick() would cycle stale
+# buffers that no longer match the picture
+for _ in range(leds.SETTLE_FRAMES + 1):
+    ring2._plan(still)
+ok("settling after movement builds the subframes", ring2._active == 6)
+ring2._plan(moving[0])
+ok("moving again drops straight back to one buffer", ring2._active == 1)
+ok("and restarts the cycle at the first buffer", ring2._idx == 0)
+
+ok("describe() says which of the two it is doing",
+   "single frame" in ring2.describe(), ring2.describe())
+
+print()
 if FAILED:
     print("FAILED: %s" % ", ".join(FAILED))
     raise SystemExit(1)

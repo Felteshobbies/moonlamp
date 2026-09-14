@@ -249,7 +249,21 @@ Measured residual error at the low steps: **0.02 instead of 0.50 of an 8-bit
 step.**
 
 Optionally, **temporal dithering** can be switched on from the Output section
-of the web page. It splits each frame into several subframes whose time average
+of the web page. It engages only while the picture is holding still, and that
+restriction is not a detail -- it is the whole difference between the feature
+working and actively hurting. Building six subframes costs six dithers, 32 ms
+on this chip against 13 ms for the picture itself. On a moving programme the
+loop then never finishes early, `tick()` runs once per frame instead of dozens
+of times, and the six subframes are shown for 50 ms each: that does not
+average, it strobes, and a drifting rainbow lurches around the ring in thirds
+of a second.
+
+So the driver asks a cheaper question instead: has the frame stopped changing?
+A moon phase holds the same 16-bit values for minutes, so its subframes are
+built once and then cycle for as long as that lasts -- exactly the case they
+help. Anything moving gets a single dither, no worse than the blocking path and
+still over DMA, so the CPU is never held with interrupts off. The status page
+says which of the two it is doing. It splits each frame into several subframes whose time average
 resolves finer than a single count, which buys about three extra bits exactly
 where they are needed, and makes individual LEDs fade in smoothly instead of
 snapping on. That needs the DMA output path: the CPU only starts the transfer

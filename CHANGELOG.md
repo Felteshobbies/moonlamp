@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+* **Temporal dithering no longer fights the animations.** It used to build its
+  subframes on every frame -- six dithers, 32 ms against 13 ms for the picture
+  -- so the loop never finished early, `tick()` ran once per frame rather than
+  dozens of times, and the six subframes were each shown for 50 ms. That is not
+  averaging, it is strobing, and a drifting rainbow lurched around the ring in
+  thirds of a second. The driver now builds subframes only once a frame has
+  held still for three passes, and gives anything moving a single dither. The
+  status page says which of the two it is doing.
+
 ## 0.2 — 2026-09-14
 
 * **P7 Rainbow**, a new program: the whole spectrum around the ring at once,

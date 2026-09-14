@@ -189,10 +189,20 @@ def cmd_releases(args):
     return 0
 
 
+def cmd_version(args):
+    """What this build is and what it carries. Touches no hardware."""
+    from . import VERSION
+    print("  moonlamp-installer %s" % VERSION)
+    _print_bundled()
+    return 0
+
+
 def build_parser():
     ap = argparse.ArgumentParser(
         prog="moonlamp-installer",
         description="Install and update the moon lamp firmware on a Pico W.")
+    ap.add_argument("--version", action="store_true",
+                    help="show what this build carries and exit")
     ap.add_argument("--port", help="serial port, e.g. COM5 or /dev/ttyACM0")
     ap.add_argument("--prereleases", action="store_true",
                     help="also consider pre-releases on GitHub")
@@ -226,6 +236,9 @@ def build_parser():
                    help="reinstall even when nothing is newer")
     p.set_defaults(func=cmd_update)
 
+    p = sub.add_parser("version", help="what this build carries")
+    p.set_defaults(func=cmd_version)
+
     p = sub.add_parser("config", help="show the lamp's settings, change none")
     p.set_defaults(func=cmd_config)
 
@@ -237,6 +250,8 @@ def build_parser():
 def main(argv=None):
     ap = build_parser()
     args = ap.parse_args(argv)
+    if getattr(args, "version", False):
+        return cmd_version(args)
     if not getattr(args, "func", None):
         args = ap.parse_args((argv or []) + ["status"])
     try:

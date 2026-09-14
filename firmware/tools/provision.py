@@ -122,13 +122,13 @@ def main():
     ap.add_argument("--port", help="serial port, e.g. COM5 or /dev/ttyACM0")
     ap.add_argument("--ssid")
     ap.add_argument("--password", default="")
-    ap.add_argument("--hostname", default="mondlampe")
+    ap.add_argument("--hostname", default="moonlamp")
     ap.add_argument("--lat", type=float)
     ap.add_argument("--lon", type=float)
     ap.add_argument("--utc-offset", type=int, default=1)
-    ap.add_argument("--leds", type=int, default=44)
+    ap.add_argument("--leds", type=int, default=40)
     ap.add_argument("--led-offset", type=float, default=270.0,
-                    help="physical angle of pixel 0, 270 = bottom")
+                    help="angle of pixel 0; 270 = 6 o'clock, the default")
     ap.add_argument("--led-pin", type=int, default=16)
     ap.add_argument("--code-only", action="store_true",
                     help="only copy the code, leave config.json untouched")

@@ -50,6 +50,7 @@ are cast with a horizon sweep per LED. The dome height, the profile and the
 | | |
 |---|---|
 | [`firmware/`](firmware/) | MicroPython for the Pico W: ephemeris, rendering, dithering, PIO LED driver, web interface |
+| [`installer/`](installer/) | A single executable that flashes a blank Pico and updates it later |
 | [`cad/`](cad/) | FreeCAD sources of the revised frame and the PrusaSlicer projects |
 | [`models/`](models/) | Where to get the printable files — **the STLs are not in git**, see [models/README.md](models/README.md) |
 
@@ -114,9 +115,15 @@ python firmware\tools\provision.py --port COM5 --ssid MyNetwork ^
 
 Details, wiring and the full parameter list: [firmware/README.md](firmware/README.md).
 
-It is no rocket science, but some experience with microcontrollers, electronics
-and the command line is helpful. A future release may include a one-click
-installer to make setup easier.
+**Or use the installer.** A single executable takes a factory-fresh Pico all
+the way to a running lamp: it flashes MicroPython, writes the firmware, asks for
+Wi-Fi and where pixel 0 sits, and opens the lamp in your browser. It carries
+everything it needs, so no Python, no `pip` and no network are required. The
+same tool updates the lamp later, pulling newer firmware from this repository's
+releases. See [installer/README.md](installer/README.md).
+
+Either way it is no rocket science, but some experience with microcontrollers
+and electronics is helpful.
 
 ---
 
@@ -145,8 +152,9 @@ midnight. Long-term drift over 20 years is 0.01 days per lunation.
   It is off by default and the lamp falls back to the blocking output path if
   DMA is unavailable.
 * There is no over-the-air update yet; new code goes in over USB.
-* Setup still runs through the command line. A one-click installer is on the
-  list for a future release.
+* The installer executable is unsigned, so Windows SmartScreen will warn about
+  it. Code signing is the only real fix and costs money; until then the folder
+  build and the ZIP are flagged less often than the single file.
 
 ---
 

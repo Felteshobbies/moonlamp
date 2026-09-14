@@ -1,0 +1,104 @@
+name: Build installer
+
+# Builds the installer for all three platforms. PyInstaller cannot
+# cross-compile, so each one has to be built on its own runner.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pyserial
+      - name: Firmware tests
+        run: |
+          python firmware/tests/test_ephemeris.py
+          python firmware/tests/test_render.py
+          python firmware/tests/test_system.py
+          python firmware/tests/test_web.py
+      - name: Installer tests
+        run: python installer/tests/test_installer.py
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            asset: moonlamp-installer-windows.zip
+          - os: macos-latest
+            asset: moonlamp-installer-macos.zip
+          - os: ubuntu-latest
+            asset: moonlamp-installer-linux.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # tkinter is not in the Ubuntu runner's Python by default
+      - if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y python3-tk
+
+      - run: python -m pip install pyserial pyinstaller
+      - run: python installer/build.py
+
+      # Zipped even on Windows: a bare .exe downloaded from the internet is
+      # blocked more aggressively than the same file inside an archive.
+      - name: Package
+        shell: bash
+        run: |
+          cd installer/dist
+          if [ -f moonlamp-installer.exe ]; then
+            7z a ../../${{ matrix.asset }} moonlamp-installer.exe
+          else
+            zip -r ../../${{ matrix.asset }} moonlamp-installer*
+          fi
+
+      - name: Smoke test
+        shell: bash
+        run: |
+          cd installer/dist
+          if [ -f moonlamp-installer.exe ]; then
+            ./moonlamp-installer.exe status || true
+          else
+            ./moonlamp-installer status || true
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: ${{ matrix.asset }}
+
+  release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Build the firmware archive
+        run: python firmware/tools/make_release.py
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/**/*.zip
+            dist/*.zip
+          draft: true
+          generate_release_notes: true

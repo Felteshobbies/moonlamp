@@ -49,3 +49,11 @@ firmware/tests/preview_firmware.py
 
 # Built release archives -- attached to GitHub releases, not versioned
 dist/
+
+# --- Installer build products -------------------------------------------------
+# payload/ is staged from firmware/ at build time, so it is a copy by
+# definition; dist/ and build/ are PyInstaller output.
+installer/moonlamp_installer/payload/
+installer/dist/
+installer/build/
+installer/*.spec

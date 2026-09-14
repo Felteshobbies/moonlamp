@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+* **An installer**, as a single executable. It takes a blank Pico from BOOTSEL
+  to a running lamp -- MicroPython, firmware, Wi-Fi, location, pixel 0 -- and
+  updates it afterwards from this repository's releases. It carries the
+  firmware and a MicroPython build inside it, so it needs no network.
+  It speaks the raw REPL protocol directly rather than driving mpremote, which
+  cannot work once frozen: `sys.executable` is then the executable itself.
+
 * **P6 Spectrum**, a new program: the full colour wheel at saturation, one turn
   every seven minutes. The counterpart to P3, which stays muted on purpose.
 * **P3 Colour cycle** is less timid. The coloured share went from 45 % to 62 %,

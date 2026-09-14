@@ -10,9 +10,9 @@ models/slicer/
 # Rasterised height fields -- caches, rebuilt on demand in about a minute
 tools/*.npz
 
-# MicroPython runtime. Download the build for your board from micropython.org,
-# the exact version used here is named in firmware/README.md.
-firmware/micropython/
+# The MicroPython build is deliberately NOT ignored: the installer has to carry
+# it, so a build runner with no local copy has to be able to find it in the
+# checkout. See firmware/micropython/README.md.
 
 # --- FreeCAD -----------------------------------------------------------------
 *.FCBak

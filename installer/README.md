@@ -24,6 +24,21 @@ moonlamp-installer releases     what has been published
    position** — the same way the lamp's own web page asks.
 5. Restarts the lamp, finds its address and offers to open it.
 
+### What the bootloader can and cannot tell us
+
+`INFO_UF2.TXT` on the BOOTSEL drive names the chip family, and that is checked
+before anything is written: a UF2 carries a family id and the bootloader
+silently discards blocks that do not match, so flashing an RP2040 build onto a
+Pico 2 does nothing at all and the board just never comes back. Refusing up
+front with an explanation is far kinder than that silence.
+
+What it cannot tell us is whether the board has a radio. An RP2040 bootloader
+reports `Board-ID: RPI-RP2` for a Pico and a Pico W alike, so any attempt to
+spot the W there raises a false alarm on every Pico W there is. That question is
+therefore settled afterwards, by asking the running MicroPython whether
+`network` imports — and if it does not, the installer says so plainly, because
+a lamp without Wi-Fi never gets the time and sits in demo mode for ever.
+
 The update path compares what is on the board against both the copy inside the
 installer and the newest release on GitHub, and offers whichever is newer.
 Settings are never touched by an update.

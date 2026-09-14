@@ -59,6 +59,8 @@ def cmd_status(args):
               % (state["bootsel_drive"], info.get("Board-ID", "unknown")))
     if state["micropython"]:
         print("  MicroPython : %s" % state["micropython"])
+        print("  Wi-Fi       : %s" % ("yes" if state.get("wifi") else
+                                      "no radio -- this is not a W board"))
     if state["firmware"]:
         print("  Firmware    : %s" % state["firmware"])
         rel, why = install.check_for_update(state["firmware"],

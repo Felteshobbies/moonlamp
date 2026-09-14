@@ -120,15 +120,35 @@ def read_board_info(drive):
     return out
 
 
-def board_wants_wifi_build(info):
-    """True when INFO_UF2.TXT describes a board with a radio.
+def board_family(info):
+    """Chip family from INFO_UF2.TXT: "rp2350", "rp2040", or None.
 
-    Flashing a non-W build onto a Pico W leaves `import network` failing at
-    boot with nothing on the ring to explain why, so it is worth catching
-    before the copy rather than after.
+    This is the one thing the bootloader genuinely tells us. It does *not*
+    reveal whether a board has a radio: an RP2040 bootloader reports
+    "Board-ID: RPI-RP2" for a Pico and a Pico W alike, so any attempt to spot
+    the W here produces a false alarm on every Pico W there is. Whether Wi-Fi
+    exists can only be established once MicroPython is running -- see
+    Pico.has_wifi().
+
+    The family does matter, though: a UF2 carries a family id and the
+    bootloader silently drops blocks that do not match, so flashing across
+    families is harmless but does nothing, and the board simply never comes
+    back. Far better to say so before the copy.
     """
     text = " ".join(info.values()).lower()
-    return " w" in text or text.endswith("w") or "wifi" in text
+    if "2350" in text:
+        return "rp2350"
+    if "rp2" in text:
+        return "rp2040"
+    return None
+
+
+def uf2_family(path):
+    """Which family a UF2 is built for, from its name."""
+    name = os.path.basename(path).upper()
+    if "PICO2" in name or "RP2350" in name:
+        return "rp2350"
+    return "rp2040"
 
 
 def copy_uf2(uf2_path, drive, progress=None):
@@ -358,6 +378,26 @@ class Pico(object):
             return out.strip() or None
         except DeviceError:
             return None
+
+    def has_wifi(self):
+        """Is there a radio driver on this board?
+
+        The only dependable way to tell a Pico from a Pico W. The bootloader
+        cannot say, and the lamp needs Wi-Fi for its clock, so a board without
+        it runs the demo program for ever and nothing on the ring explains why.
+        """
+        probe = "\n".join((
+            "try:",
+            " import network",
+            " network.WLAN",
+            " print('yes')",
+            "except Exception:",
+            " print('no')",
+        ))
+        try:
+            return self.exec_(probe).strip() == "yes"
+        except DeviceError:
+            return False
 
     def micropython_version(self):
         try:

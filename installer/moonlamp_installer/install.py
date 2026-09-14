@@ -70,6 +70,7 @@ def survey(report=None):
                 pico.enter_raw()
                 out["firmware"] = pico.firmware_version()
                 out["micropython"] = pico.micropython_version()
+                out["wifi"] = pico.has_wifi()
             finally:
                 pico.close()
         except device.DeviceError as exc:
@@ -101,10 +102,14 @@ def flash_micropython(uf2_path=None, drive=None, report=None, timeout=60.0):
     board = info.get("Board-ID") or info.get("Model") or "unknown board"
     _say(report, Step.MICROPYTHON, "found %s on %s" % (board, drive))
 
-    if info and not device.board_wants_wifi_build(info) and "_W" in uf2_path:
-        _say(report, Step.MICROPYTHON,
-             "warning: %s does not look like a W variant, but the build is "
-             "for one. Wi-Fi will not work." % board)
+    want = device.board_family(info)
+    have = device.uf2_family(uf2_path)
+    if want and want != have:
+        raise device.DeviceError(
+            "this is an %s board but the bundled MicroPython is an %s build. "
+            "The bootloader would discard it and the board would stay in "
+            "BOOTSEL mode. Fetch the matching build from micropython.org and "
+            "pass it with --uf2." % (want.upper(), have.upper()))
 
     def prog(done, total):
         _say(report, Step.MICROPYTHON, "writing MicroPython", done, total)
@@ -117,6 +122,21 @@ def flash_micropython(uf2_path=None, drive=None, report=None, timeout=60.0):
             "the board did not come back with MicroPython on it. If it is a "
             "Pico 2, it needs the RPI_PICO2_W build instead.")
     _say(report, Step.MICROPYTHON, "MicroPython is running on %s" % port)
+
+    # Now that there is a REPL, the W question can finally be settled
+    try:
+        pico = device.Pico(port)
+        try:
+            pico.enter_raw()
+            if not pico.has_wifi():
+                _say(report, Step.MICROPYTHON,
+                     "warning: this board has no radio. The lamp will run, but "
+                     "without Wi-Fi it never gets the time and stays in demo "
+                     "mode. A Pico W or Pico 2 W is needed for moon phases.")
+        finally:
+            pico.close()
+    except device.DeviceError:
+        pass
     return port
 
 

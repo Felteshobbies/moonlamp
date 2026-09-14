@@ -270,6 +270,35 @@ a = programs.rainbow(cfg8, 1.0, 0.0)
 b = programs.rainbow(cfg8, 1.0, programs.RAINBOW_PERIOD)
 ok("a full turn closes seamlessly", a == b)
 
+# Smoothness in time. The animation is driven by whatever main.py passes as
+# `t`, so it can only be as smooth as that clock is fine-grained.
+tiny = programs.RAINBOW_PERIOD / 240.0        # a quarter of a frame at 60 fps
+near = programs.rainbow(cfg8, 1.0, tiny)
+step = max(max(abs(x - y) for x, y in zip(p1, p2))
+           for p1, p2 in zip(a, near))
+ok("a small step in time makes a small change in colour",
+   step < 0.05 * render.FULL,
+   "%d counts of %d for %.2f s" % (step, render.FULL, tiny))
+
+# And the trap that caused it: MicroPython's time.time() returns whole seconds,
+# so deriving `t` from it advanced every animation in one-second jumps. On the
+# rainbow that was several LED positions at a time. main.py must therefore
+# accumulate from ticks_ms(), and this is the guard on that.
+main_src = open(os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                             os.pardir, "main.py"), encoding="utf-8").read()
+call = "programs.frame_for("
+idx = main_src.index(call)
+args = main_src[idx:idx + 260]
+ok("main.py does not time the programs with time.time()",
+   "time.time()" not in args, args.split(chr(10))[1].strip())
+ok("main.py accumulates programme time in milliseconds",
+   "prog_time += ticks_diff(" in main_src)
+
+leap = programs.rainbow(cfg8, 1.0, 1.0)
+moved = sum(1 for p1, p2 in zip(a, leap) if p1 != p2)
+ok("one whole second would have moved most of the ring", moved > 30,
+   "%d of %d LEDs change in a one-second jump" % (moved, len(a)))
+
 # Turning must actually move the pattern along the ring
 half = programs.rainbow(cfg8, 1.0, programs.RAINBOW_PERIOD / 2.0)
 ok("the pattern travels as time passes", half != a)

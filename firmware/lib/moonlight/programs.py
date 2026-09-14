@@ -37,11 +37,10 @@ CYCLE_PERIOD = 90.0         # seconds for one turn of the wheel
 SPECTRUM_PERIOD = 420.0     # seconds for one turn, seven minutes
 SPECTRUM_WHITE = 0.10
 
-# P7 turns fast enough to watch. It can, because nothing about it is meant to
-# look like the moon -- and because the whole wheel is on the ring at once, a
-# turn moves each colour by only one LED position rather than recolouring the
-# entire disc.
-RAINBOW_PERIOD = 12.0       # seconds for one full turn of the ring
+# P7 drifts rather than races. At forty seconds a lap and forty LEDs, a colour
+# takes about a second to hand over to its neighbour -- fast enough to see it
+# moving, slow enough that nothing appears to step.
+RAINBOW_PERIOD = 40.0       # seconds for one full turn of the ring
 
 # Altitude above which the moon counts as risen. Slightly below zero, because
 # refraction lifts it at the horizon and the transition should be gradual.

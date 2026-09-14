@@ -5,6 +5,13 @@
 * **P7 Rainbow**, a new program: the whole spectrum around the ring at once,
   one turn every twelve seconds. The only program that uses the ring as a ring,
   and it works because the dome keeps each LED's light on its own side.
+* **Animations no longer step once a second.** Programme time came from
+  `time.time()`, which on MicroPython returns whole seconds as an integer, so
+  every animated programme advanced in one-second jumps -- three LED positions
+  at a time on the rainbow. It now accumulates from `ticks_ms()`, which also
+  avoids that counter's own wrap. P0, P3, P6 and P7 were all affected; it was
+  simply most visible on the fastest one.
+* **The rainbow turns more slowly**, forty seconds to a lap instead of twelve.
 * **The colour wheel is now constant in power**, the way the Adafruit
   strandtest wheel is. Saturating a cosine wheel gives the right hues but makes
   the six pure primaries a third dimmer than the blends between them -- visible

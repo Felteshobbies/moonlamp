@@ -308,7 +308,17 @@ def main():
     status = {"msg": status_text()}
     dirty_at = None
     calibrating = False
-    t_start = time.time()
+    # Programme time, in seconds with millisecond resolution.
+    #
+    # It must NOT come from time.time(): on MicroPython that returns whole
+    # seconds as an integer, so every animation advanced in one-second jumps.
+    # On the rainbow, at twelve seconds to a lap, that was a leap of three LED
+    # positions at a time -- the thing looked like it was ticking rather than
+    # turning. Accumulating from ticks_ms() also sidesteps the wrap that
+    # ticks_ms() has on its own, which would otherwise put one jump in every
+    # few days of running.
+    prog_time = 0.0
+    last_tick = ticks_ms()
     boot_at = time.time()
     frame_ms = int(1000 / cfg["fps"])
     last_frame = ticks_ms()
@@ -487,6 +497,8 @@ def main():
 
     while True:
         now = ticks_ms()
+        prog_time += ticks_diff(now, last_tick) / 1000.0
+        last_tick = now
         if ticks_diff(now, last_frame) < frame_ms:
             # Between image updates: keep the subframes going and serve HTTP.
             # tick() returns immediately unless the DMA path is idle, so this
@@ -527,7 +539,7 @@ def main():
             if name == "program":
                 cfg["program"] = (cfg["program"] + 1) % programs.N_PROGRAMS
                 flash_count(ring, cfg, cfg["program"] + 1)
-                t_start = time.time()
+                prog_time = 0.0
             elif name == "up":
                 cfg["brightness"] = min(len(configmod.BRIGHTNESS_STEPS) - 1,
                                         cfg["brightness"] + 1)
@@ -552,8 +564,7 @@ def main():
         else:
             d = timeutil.utc_day_number() if have_time else 0.0
             ring.show(programs.frame_for(cfg["program"], cfg, d, level,
-                                         time.time() - t_start,
-                                         manual_state, have_time))
+                                         prog_time, manual_state, have_time))
 
         if dirty_at is not None and ticks_diff(now, dirty_at) > SAVE_DELAY_MS:
             configmod.save(cfg)

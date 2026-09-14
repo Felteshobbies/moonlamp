@@ -5,4 +5,4 @@ always say which build is on it -- there is no other way to tell once the Pico
 is on the wall.
 """
 
-VERSION = "0.2.1-dev"
+VERSION = "0.2.1"

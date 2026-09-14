@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.1 — 2026-09-14
 
 * **Temporal dithering no longer fights the animations.** It used to build its
   subframes on every frame -- six dithers, 32 ms against 13 ms for the picture

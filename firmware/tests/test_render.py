@@ -180,6 +180,64 @@ for cw in (False, True):
 ok("a narrow arc at the offset angle peaks on pixel 0", not bad, str(bad))
 
 print()
+print("6. Colour mixing and clock positions")
+
+# Clock positions are the interface; degrees are storage. A round trip through
+# both must land back where it started for every hour, or the dropdown would
+# quietly move the ring.
+bad = [h for h in range(1, 13)
+       if render.angle_to_clock(render.clock_to_angle(h)) != h]
+ok("every clock position survives the round trip", not bad, str(bad))
+
+# The four the user is told about by name, against the module's own convention
+cardinals = {12: 90.0, 3: 0.0, 6: 270.0, 9: 180.0}
+bad = [(h, render.clock_to_angle(h)) for h, deg in cardinals.items()
+       if abs(render.clock_to_angle(h) - deg) > 1e-9]
+ok("12/3/6/9 are top/right/bottom/left", not bad, str(bad))
+
+ok("the calibration reference is 6 o'clock",
+   render.clock_to_angle(render.CALIBRATION_CLOCK) == render.CALIBRATION_ANGLE)
+
+ok("an angle on the hour is recognised", render.on_the_hour(270.0))
+ok("an angle between hours is not", not render.on_the_hour(285.0))
+
+# mix(): the manual mode's four sliders must reach each channel on its own,
+# which is the whole reason it does not go through tint()
+white = render.mix(1.0, (0.0, 0.0, 0.0, 1.0))
+ok("W alone lights only the white channel",
+   white[3] == render.FULL and max(white[:3]) == 0, str(white))
+red = render.mix(1.0, (1.0, 0.0, 0.0, 0.0))
+ok("R alone lights only the red channel",
+   red[0] == render.FULL and red[1] == 0 and red[3] == 0, str(red))
+ok("mix clamps out-of-range weights",
+   render.mix(1.0, (2.0, -1.0, 0.0, 0.0))[:2] == (render.FULL, 0))
+ok("mix at zero level is dark", render.mix(0.0, (1.0, 1.0, 1.0, 1.0))
+   == (0, 0, 0, 0))
+
+# saturate() is what separates P6 from P3: the cosine wheel bottoms out at
+# 0.25, so without it every hue would stay pastel
+worst = 0.0
+for i in range(72):
+    r, g, b = render.saturate(*render.wheel(i / 72.0))
+    worst = max(worst, min(r, g, b))
+ok("saturate drives one channel to zero at every hue", worst < 1e-9,
+   "worst residual %.4f" % worst)
+
+# ... and it is worth doing: the raw wheel is fully saturated only at the six
+# hues where one lobe bottoms out, and washed out by up to 0.25 in between.
+mins = [min(render.wheel(i / 360.0)) for i in range(360)]
+ok("the raw wheel is pastel between those hues",
+   max(mins) > 0.2 and sum(mins) / len(mins) > 0.05,
+   "per-hue minimum up to %.2f, mean %.3f" % (max(mins),
+                                              sum(mins) / len(mins)))
+
+# The manual colour must actually reach the frame
+frame = render.phase_frame(N, 1.0, True, 1.0, colour=(1.0, 0.0, 0.0, 0.0),
+                           earthshine=0.0)
+ok("phase_frame honours an explicit colour",
+   frame[0][0] > 0 and frame[0][3] == 0, str(frame[0]))
+
+print()
 if FAILED:
     print("FAILED: %s" % ", ".join(FAILED))
     raise SystemExit(1)

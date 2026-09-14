@@ -48,7 +48,8 @@ info = {
         ("Moon altitude", "+21.4 deg above the horizon"),
         ("Uptime", "143 min"),
     ],
-    "manual": {"illum": 0.5, "waxing": True, "warmth": 0.0},
+    "manual": {"illum": 0.5, "waxing": True,
+               "r": 0.0, "g": 0.0, "b": 0.0, "w": 1.0},
     "output": "blocking",
 }
 

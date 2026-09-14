@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+* **P6 Spectrum**, a new program: the full colour wheel at saturation, one turn
+  every seven minutes. The counterpart to P3, which stays muted on purpose.
+* **P3 Colour cycle** is less timid. The coloured share went from 45 % to 62 %,
+  because the old setting did not read as a colour change from across a room.
+* **P5 Manual** reworked. Warmth is gone, replaced by four channel sliders --
+  red, green, blue and white -- which is the only way to address the W channel
+  on its own. The phase is now stated plainly as 0 to 100 %.
+* **Pixel 0 is set as a clock position** rather than an angle in degrees: 12 at
+  the top, 3 right, 6 bottom, 9 left, read off the lamp from the front. Degrees
+  remain the stored form and the portal still takes them.
+
 ## 0.1 — 2026-09-13
 
 First release of the firmware. It runs the lamp: Wi-Fi, web interface, PIO LED

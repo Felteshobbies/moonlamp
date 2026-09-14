@@ -15,6 +15,7 @@ except ImportError:
 from . import VERSION
 from . import config as configmod
 from . import programs
+from . import render
 
 MAX_REQUEST = 2048
 
@@ -173,7 +174,7 @@ PORTAL_FIELDS = (
     ("longitude", "Longitude (east positive)", "text"),
     ("utc_offset", "Time zone (hours from UTC)", "text"),
     ("led_count", "Number of LEDs", "text"),
-    ("led_offset", "Angle of pixel 0 (degrees)", "text"),
+    ("led_offset", "Angle of pixel 0 (deg: 90 = top, 0 = right, 270 = bottom)", "text"),
 )
 
 
@@ -203,9 +204,10 @@ DESCRIPTIONS = (
     "Every mode at high speed, a whole month in a minute. Needs neither network nor clock.",
     "The current moon phase, visible around the clock.",
     "Like P1, but only while the moon is actually up. Brightness and colour follow its altitude.",
-    "Full moon with a slowly drifting hue.",
+    "Full moon with a slowly drifting tint. White still carries it, so the disc stays a moon.",
     "The dimmest possible warm white across the whole ring.",
-    "Azimuth, illuminated fraction and warmth set by hand.",
+    "Phase and colour by hand: four channel sliders and an illuminated fraction.",
+    "The whole colour wheel at full saturation, one turn every seven minutes.",
 )
 
 
@@ -238,7 +240,8 @@ def control_page(cfg, info):
 
     manual = info.get("manual", {})
     m_illum = int(manual.get("illum", 0.5) * 100)
-    m_warmth = int(manual.get("warmth", 0.0) * 100)
+    m_rgbw = [int(manual.get(k, 1.0 if k == "w" else 0.0) * 100)
+              for k in ("r", "g", "b", "w")]
     waxing = manual.get("waxing", True)
 
     n_leds = int(cfg["led_count"])
@@ -268,32 +271,53 @@ def control_page(cfg, info):
                % ("off" if es == 0 else "%.1f&nbsp;%%" % (es / 10.0),
                   es, _LIVE_PERMILLE))
 
+    channels = ""
+    for name, label, value in zip(("r", "g", "b", "w"),
+                                  ("Red", "Green", "Blue", "White"),
+                                  m_rgbw):
+        channels += ("<label>%s <output>%d&nbsp;%%</output>"
+                     "<input name='%s' type='range' min='0' max='100' "
+                     "value='%d'%s></label>" % (label, value, name,
+                                                value, _LIVE))
+
     out.append("<h2>Manual &mdash; switches to P5</h2>"
                "<form action='/set'>"
                "<input type='hidden' name='program' value='5'>"
-               "<label>Illuminated fraction <output>%d&nbsp;%%</output>"
+               "<label>Moon phase <output>%d&nbsp;%%</output>"
                "<input name='illum' type='range' min='0' max='100' value='%d'%s>"
                "</label>"
                "<label>Direction<select name='waxing'>"
                "<option value='1'%s>waxing &ndash; lit from the right</option>"
                "<option value='0'%s>waning &ndash; lit from the left</option>"
                "</select></label>"
-               "<label>Warmth <output>%d&nbsp;%%</output>"
-               "<input name='warmth' type='range' min='0' max='100' value='%d'%s>"
-               "</label>"
+               "%s"
                "<button type='submit'>Apply</button></form>"
+               "<p class='hint'>0&nbsp;%% is new moon, 100&nbsp;%% is full. The "
+               "four sliders set the colour directly; White alone is a plain "
+               "white moon. Overall brightness comes from the steps above, so "
+               "these only set the mix between the channels.</p>"
                % (m_illum, m_illum, _LIVE, "" if not waxing else " selected",
-                  " selected" if not waxing else "",
-                  m_warmth, m_warmth, _LIVE))
+                  " selected" if not waxing else "", channels))
 
-    # --- Ring geometry. The angle is the one setting you want to change while
-    # watching the lamp, so it gets nudge buttons of exactly one LED pitch.
+    # --- Ring geometry. Stated as a clock position, because that is how anyone
+    # looking at a lamp on a wall would describe a point on its rim. Degrees
+    # remain the stored form and stay available for a strip that did not happen
+    # to start on an hour.
+    clock = render.angle_to_clock(offset)
+    named = {12: " &ndash; top", 3: " &ndash; right",
+             6: " &ndash; bottom", 9: " &ndash; left"}
+    hours = ""
+    for h in [12] + list(range(1, 12)):
+        hours += ("<option value='%d'%s>%d o&rsquo;clock%s</option>"
+                  % (h, " selected" if h == clock else "", h,
+                     named.get(h, "")))
+
+    exact = render.on_the_hour(offset)
     out.append("<h2>Ring</h2>"
                "<form action='/set'>"
-               "<label>Angle of pixel 0 <output>%d&deg;</output>"
-               "<input name='led_offset' type='range' min='0' max='359' "
-               "value='%d'%s></label>"
-               "<label>Pixel order<select name='led_clockwise'>"
+               "<label>Pixel 0 sits at<select name='led_clock'>%s</select>"
+               "</label>"
+               "<label>Counting from there<select name='led_clockwise'>"
                "<option value='0'%s>counter-clockwise</option>"
                "<option value='1'%s>clockwise</option>"
                "</select></label>"
@@ -301,18 +325,25 @@ def control_page(cfg, info):
                "<div class='chips'>"
                "<a class='chip' href='/set?nudge=-1'>&minus;1 LED</a>"
                "<a class='chip' href='/set?nudge=1'>+1 LED</a>"
-               "<a class='chip' href='/calibrate'>Find the angle</a></div>"
-               "<p class='hint'>Zero degrees is the right-hand side of the "
-               "ring, 90&deg; the top, 270&deg; the bottom. One LED is "
-               "%.1f&deg; here. If you do not know where pixel&nbsp;0 ended "
-               "up, press &ldquo;Find the angle&rdquo;: it lights the single "
-               "LED this setting believes is at the <em>bottom</em> of the "
-               "ring. Nudge by &plusmn;1&nbsp;LED until the lit one really is "
-               "at the bottom &mdash; then the angle is right. Press the "
-               "program button on the device, or pick a program here, to "
-               "leave that mode again.</p>"
-               % (int(offset), int(offset), _LIVE,
-                  "" if cw else " selected", " selected" if cw else "",
+               "<a class='chip' href='/calibrate'>Find pixel 0</a></div>"
+               "<p class='hint'>Look at the lamp from the front and read the "
+               "rim like a clock face: 12 at the top, 3 on the right, 6 at the "
+               "bottom, 9 on the left. Set where the <em>first</em> LED of the "
+               "strip sits, then whether the numbers run clockwise or "
+               "counter-clockwise from it &mdash; follow the arrow printed on "
+               "the strip.</p>"
+               "<p class='hint'>Not sure which LED is the first one? Press "
+               "&ldquo;Find pixel&nbsp;0&rdquo;. One LED lights: the one this "
+               "setting believes is at <b>6 o&rsquo;clock</b>. Nudge by "
+               "&plusmn;1&nbsp;LED until the lit one really is at the bottom "
+               "&mdash; then the setting is right, and you never had to count "
+               "a single LED. Press the program button on the device, or pick "
+               "a program here, to leave that mode again.</p>"
+               "<p class='hint'>Currently %d&deg;%s. One LED is %.1f&deg; on "
+               "this ring.</p>"
+               % (hours, "" if cw else " selected", " selected" if cw else "",
+                  int(offset),
+                  "" if exact else ", between two clock positions",
                   pitch))
 
     out.append("<form action='/set'>"

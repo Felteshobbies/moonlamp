@@ -105,25 +105,35 @@ the dimmest level at which *every* LED still lights is one count — 1/255 of th
 light, which is 9 % perceived. Below that the ring does not get dimmer, it
 thins out into isolated lit pixels.
 
-### Calibrating the angle offset
+### Where pixel 0 sits
 
-Where pixel 0 physically ended up after gluing is known only to whoever glued
-it. Without that value the crescent points the wrong way.
+Where the first LED of the strip ended up after gluing is known only to whoever
+glued it. Without that, the crescent points the wrong way.
 
-Angles are measured looking at the lamp from the front: **0° is the right-hand
-side, 90° the top, 180° the left, 270° the bottom.** The default is 270°,
-because the cable channel leaves at the bottom and the strip's closing gap is
-least visible there.
+**Read the rim like a clock face**, looking at the lamp from the front: 12 at
+the top, 3 on the right, 6 at the bottom, 9 on the left. The browser asks for
+exactly that, plus whether the LED numbers run clockwise or counter-clockwise
+from there — follow the arrow printed on the strip.
 
-Long-press the program button, or use "Find the angle" in the browser. A single
-point lights up: the LED that the current setting believes sits at the **bottom**
-of the ring. Step it with brighter/dimmer, or with the ±1 LED buttons on the
-page, until the lit LED really is at the bottom — then the angle is correct.
-Press the program button again to leave. The value is written 10 s later, to
-spare the flash.
+The default is **6 o'clock**, because the cable channel leaves at the bottom
+and the strip's closing gap is least visible there.
 
-This deliberately does not require you to know which physical LED is number 0,
-which is the normal situation once the strip is in the frame.
+Internally the value is still an angle in degrees (`led_offset`: 0 = right,
+90 = top, 180 = left, 270 = bottom), which is what the setup portal and
+`provision.py` take. The clock positions are just the readable form of the same
+number, and a strip that does not start on an hour can still be trimmed with
+the ±1 LED buttons.
+
+#### If you do not know which LED is the first one
+
+Long-press the program button, or press "Find pixel 0" in the browser. A single
+point lights up: the LED that the current setting believes sits at **6 o'clock**.
+Step it with brighter/dimmer, or with the ±1 LED buttons on the page, until the
+lit LED really is at the bottom — then the setting is correct. Press the program
+button again to leave. The value is written 10 s later, to spare the flash.
+
+Note what this avoids: you never have to work out which physical LED is number
+zero, which is the normal situation once the strip is in the frame.
 
 ### Programs
 
@@ -132,9 +142,24 @@ which is the normal situation once the strip is in the frame.
 | P0 | Demo — every state at speed, one lunation in 60 s | no | no |
 | P1 | Moon phase — live phase, always visible | yes | no |
 | P2 | Real moon — only while it is actually in the sky | yes | yes |
-| P3 | Colour cycle — full moon with a drifting hue | no | no |
+| P3 | Colour cycle — full moon with a drifting tint | no | no |
 | P4 | Night light — warm residual light, whole ring | no | no |
-| P5 | Manual — azimuth, phase and colour from the browser | no | no |
+| P5 | Manual — phase and an RGBW mix from the browser | no | no |
+| P6 | Spectrum — the full colour range, very slowly | no | no |
+
+**P3 and P6** are the same idea at two strengths. P3 keeps white as the base
+and only tints it, so the disc still reads as a moon; one turn takes 90 s. P6
+drives the wheel at full saturation with a 10 % white floor, and takes seven
+minutes for a turn — slow enough that you notice it has moved rather than watch
+it moving. The difference is the white share: P3 never drops below about 38 %
+white, P6 never rises above 10 %.
+
+**P5** gives you the four channels as sliders — red, green, blue and white
+separately, which is the only way to reach the W channel independently — plus
+the moon phase from 0 % (new) to 100 % (full) and the direction of the
+terminator. Overall brightness stays on the brightness steps, so the sliders
+only set the mix between channels. It starts on white alone, which is a plain
+white moon.
 
 **P2** fades in with the moon's altitude (off below −2°, full from +8°), makes a
 low moon warmer and dimmer and a high one cooler, and dims to 8 % in daylight —

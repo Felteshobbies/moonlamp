@@ -7,9 +7,10 @@ Python, so every program can be computed and rendered on a PC.
   P1  Moon phase   live phase, always visible, needs no location
   P2  Real moon    like P1, but only while the moon is actually up;
                    brightness and colour follow its altitude
-  P3  Colour cycle  full moon with a slowly drifting hue
+  P3  Colour cycle full moon with a slowly drifting tint, white still dominant
   P4  Night light  dimmest possible warm white across the whole ring
-  P5  Manual       azimuth, arc and colour come from the web interface
+  P5  Manual       phase and an explicit RGBW mix from the web interface
+  P6  Spectrum     the full colour range at saturation, very slowly
 """
 
 import math
@@ -17,10 +18,23 @@ import math
 from . import ephemeris as eph
 from . import render
 
-N_PROGRAMS = 6
+N_PROGRAMS = 7
 
 NAMES = ("Demo", "Moon phase", "Real moon", "Colour cycle", "Night light",
-         "Manual")
+         "Manual", "Spectrum")
+
+# P3 keeps white as the base and only tints it. 0.45 turned out too timid to
+# read as a colour change at all from across a room, so the coloured share is
+# larger now -- but the W channel still carries more than half, which is what
+# keeps the disc looking like a moon rather than a lamp.
+CYCLE_DEPTH = 0.62
+CYCLE_PERIOD = 90.0         # seconds for one turn of the wheel
+
+# P6 is the opposite choice: full saturation, no white base beyond a floor that
+# keeps the relief readable, and slow enough that you notice it has moved
+# rather than watch it moving.
+SPECTRUM_PERIOD = 420.0     # seconds for one turn, seven minutes
+SPECTRUM_WHITE = 0.10
 
 # Altitude above which the moon counts as risen. Slightly below zero, because
 # refraction lifts it at the horizon and the transition should be gradual.
@@ -116,21 +130,33 @@ def demo(cfg, d, level, t):
     return colour_cycle(cfg, level, k * 30.0)
 
 
-def colour_cycle(cfg, level, t):
-    """P3: full moon, hue drifting slowly."""
-    hue = (t / 60.0) % 1.0
-    # A colour wheel that keeps the W channel as the base level: the moon stays
-    # a moon instead of turning into a disco ball.
+def colour_cycle(cfg, level, t, period=CYCLE_PERIOD, depth=CYCLE_DEPTH):
+    """P3: full moon, tint drifting slowly, white still carrying the base."""
+    hue = (t / period) % 1.0
     lin = math.pow(_clamp(level), render.GAMMA)
-    a = 2.0 * math.pi * hue
-    r = 0.5 + 0.5 * math.cos(a)
-    g = 0.5 + 0.5 * math.cos(a - 2.0944)
-    b = 0.5 + 0.5 * math.cos(a - 4.1888)
-    depth = 0.45
+    r, g, b = render.wheel(hue)
     px = (int(lin * r * depth * render.FULL),
           int(lin * g * depth * render.FULL),
           int(lin * b * depth * render.FULL),
           int(lin * (1.0 - depth) * render.FULL))
+    return render.solid(cfg["led_count"], px)
+
+
+def spectrum(cfg, level, t):
+    """P6: the whole colour wheel at full saturation, very slowly.
+
+    The counterpart to P3. There the moon stays a moon and only takes on a
+    tint; here it becomes the light source and travels the full range, which is
+    what the RGBW strip can do that a white one cannot. A small white floor
+    stays in so the crater relief does not disappear into flat colour.
+    """
+    hue = (t / SPECTRUM_PERIOD) % 1.0
+    lin = math.pow(_clamp(level), render.GAMMA)
+    r, g, b = render.saturate(*render.wheel(hue))
+    px = (int(lin * r * (1.0 - SPECTRUM_WHITE) * render.FULL),
+          int(lin * g * (1.0 - SPECTRUM_WHITE) * render.FULL),
+          int(lin * b * (1.0 - SPECTRUM_WHITE) * render.FULL),
+          int(lin * SPECTRUM_WHITE * render.FULL))
     return render.solid(cfg["led_count"], px)
 
 
@@ -144,15 +170,22 @@ def night_light(cfg, level):
 
 
 def manual(cfg, level, state):
-    """P5: values come from the web interface."""
+    """P5: phase in percent and an explicit RGBW mix, both from the browser.
+
+    Colour here is not the warmth/coolness axis the moon programs use -- that
+    axis exists because a real moon only ever moves along it. Manual mode is
+    for everything a real moon does not do, so it addresses all four channels
+    directly. Default is W alone, which is a plain white moon.
+    """
+    colour = (state.get("r", 0.0), state.get("g", 0.0),
+              state.get("b", 0.0), state.get("w", 1.0))
     return render.phase_frame(cfg["led_count"],
                               state.get("illum", 0.5),
                               state.get("waxing", True),
                               level,
                               offset=cfg["led_offset"],
                               clockwise=cfg["led_clockwise"],
-                              warmth=state.get("warmth", 0.0),
-                              coolness=state.get("coolness", 0.0),
+                              colour=colour,
                               earthshine=cfg["earthshine"])
 
 
@@ -174,4 +207,6 @@ def frame_for(program, cfg, d, level, t, manual_state=None, have_time=True):
         return night_light(cfg, level)
     if program == 5:
         return manual(cfg, level, manual_state or {})
+    if program == 6:
+        return spectrum(cfg, level, t)
     return render.blank(cfg["led_count"])

@@ -87,9 +87,10 @@ white. Pico and strip grounds must be connected.
 | P0 | Demo | Every state at speed, one lunation per minute. Needs neither network nor clock |
 | P1 | Moon phase | The current phase, visible around the clock |
 | P2 | Real moon | Like P1, but only while the moon is actually above your horizon; brightness and colour follow its altitude |
-| P3 | Colour cycle | Full moon with a slowly drifting hue |
+| P3 | Colour cycle | Full moon with a slowly drifting tint, white still carrying it |
 | P4 | Night light | The dimmest warm white the hardware can hold across the whole ring |
-| P5 | Manual | Azimuth, illuminated fraction and warmth by hand |
+| P5 | Manual | Moon phase and an explicit red/green/blue/white mix, by hand |
+| P6 | Spectrum | The whole colour wheel at full saturation, one turn every seven minutes |
 
 Earthshine on the dark side is simulated as well, and a red moon can be
 scheduled for eclipse dates.

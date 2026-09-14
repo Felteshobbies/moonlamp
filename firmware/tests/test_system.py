@@ -182,6 +182,60 @@ ok("joined TX FIFO bridges more than the 80 us latch time",
    "%.0f us of buffer, latch at 80 us" % (FIFO_WORDS * word_us))
 
 print()
+print("7. The two colour programs stay different from each other")
+
+from moonlight import render                  # noqa: E402
+from moonlight import web as webmod           # noqa: E402
+
+# Forgetting the description when adding a program leaves a blank card on the
+# page, which nothing else would catch
+ok("every program has a name", len(programs.NAMES) == programs.N_PROGRAMS,
+   "%d names, %d programs" % (len(programs.NAMES), programs.N_PROGRAMS))
+ok("every program has a description",
+   len(webmod.DESCRIPTIONS) == programs.N_PROGRAMS,
+   "%d descriptions" % len(webmod.DESCRIPTIONS))
+ok("the program range in config covers them all",
+   cfgmod._RANGES["program"] == (0, programs.N_PROGRAMS - 1),
+   str(cfgmod._RANGES["program"]))
+
+# P6 must reach full saturation at every point of its cycle -- that is the one
+# thing it does that P3 does not
+worst, w3_min, w6_max = 0, 65536, 0
+for i in range(24):
+    t = i * programs.SPECTRUM_PERIOD / 24.0
+    px6 = programs.spectrum(cfg, 1.0, t)[0]
+    px3 = programs.colour_cycle(cfg, 1.0, i * programs.CYCLE_PERIOD / 24.0)[0]
+    worst = max(worst, min(px6[:3]))
+    w3_min = min(w3_min, px3[3])
+    w6_max = max(w6_max, px6[3])
+ok("P6 is fully saturated throughout", worst <= 1,
+   "largest residual on the darkest channel: %d of 65535" % worst)
+ok("P3 keeps more white than P6 ever does", w3_min > w6_max,
+   "P3 never below %d, P6 never above %d" % (w3_min, w6_max))
+
+# Regression guard on the complaint that P3 was too subtle to read as a colour
+# change at all. Chroma here is the spread across RGB at the strongest hue.
+samples = [programs.colour_cycle(cfg, 1.0,
+                                  i * programs.CYCLE_PERIOD / 180.0)[0]
+           for i in range(180)]
+chroma = max(max(px[:3]) - min(px[:3]) for px in samples) / 65535.0
+# The wheel's own widest spread is 0.866, not 1.0 -- three cosines 120 degrees
+# apart are furthest apart halfway between two lobes -- so chroma tops out at
+# CYCLE_DEPTH * 0.866. The old depth of 0.45 gave 0.39; anything above 0.50
+# means the bump is still in.
+ok("P3 has visible colour, not a hint of one", chroma > 0.50,
+   "chroma %.2f, was 0.39 at the old depth" % chroma)
+
+# Manual mode must pass its mix through untouched
+frame = programs.manual(cfg, 1.0, {"illum": 1.0, "waxing": True,
+                                   "r": 1.0, "g": 0.0, "b": 0.0, "w": 0.0})
+ok("P5 puts the slider colour on the ring",
+   frame[0][0] > 60000 and frame[0][3] == 0, str(frame[0]))
+frame = programs.manual(cfg, 1.0, {"illum": 1.0, "waxing": True})
+ok("P5 defaults to a plain white moon",
+   frame[0][3] > 60000 and max(frame[0][:3]) == 0, str(frame[0]))
+
+print()
 if FAILED:
     print("FAILED: %s" % ", ".join(FAILED))
     raise SystemExit(1)

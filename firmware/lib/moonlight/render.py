@@ -125,6 +125,30 @@ def arc_weights(n_leds, azimuth, arc, offset=0.0, clockwise=False,
 # the cable leaves through the channel. Any fixed direction would do; the point
 # is that the user can identify it by eye without counting LEDs.
 CALIBRATION_ANGLE = 270.0
+CALIBRATION_CLOCK = 6
+
+
+def clock_to_angle(hour):
+    """Clock position on the dial -> angle in this module's convention.
+
+    Degrees are mathematically convenient and humanly useless: nobody looks at
+    a lamp on the wall and thinks "217 degrees". Clock positions are how people
+    actually describe a point on a circle, so the interface speaks in those and
+    converts here. 12 o'clock is the top, 3 the right, 6 the bottom, 9 the left.
+    """
+    return (90.0 - 30.0 * (int(hour) % 12)) % 360.0
+
+
+def angle_to_clock(angle):
+    """Nearest clock position to an angle, as an hour from 1 to 12."""
+    h = int(round((90.0 - float(angle)) / 30.0)) % 12
+    return 12 if h == 0 else h
+
+
+def on_the_hour(angle, tolerance=1.0):
+    """True when the angle sits on a clock position, within a tolerance."""
+    delta = (float(angle) - clock_to_angle(angle_to_clock(angle)) + 180.0)
+    return abs(delta % 360.0 - 180.0) <= tolerance
 
 
 def pixel_at_angle(n_leds, angle, offset=0.0, clockwise=False):
@@ -188,6 +212,50 @@ def tint(level, warmth=0.0, coolness=0.0):
     return (int(r * FULL), int(g * FULL), int(b * FULL), int(w * FULL))
 
 
+def mix(level, rgbw):
+    """Linear RGBW from an explicit four-channel mix.
+
+    Where tint() derives the colour from a warmth/coolness pair -- which is
+    what the moon programs want, because a real moon only ever shifts along
+    that one axis -- this passes the caller's own mix straight through. That is
+    what the manual mode's four sliders set, and it is the only way to reach
+    the W channel independently of the colour.
+
+    rgbw are weights from 0 to 1 per channel.
+    """
+    lin = _linear(level)
+    if lin <= 0.0:
+        return (0, 0, 0, 0)
+    out = []
+    for c in rgbw:
+        c = 0.0 if c < 0.0 else (1.0 if c > 1.0 else c)
+        out.append(int(lin * c * FULL))
+    return (out[0], out[1], out[2], out[3])
+
+
+def saturate(r, g, b):
+    """Push a colour to full saturation by taking out the common white.
+
+    The cosine colour wheel is only fully saturated at the six hues where one
+    lobe bottoms out; everywhere in between all three channels stay lit, by up
+    to 0.25, and the colour reads as pastel. Subtracting the common minimum and
+    rescaling is what separates the full-range programme from the muted one.
+    """
+    m = min(r, g, b)
+    if m >= 1.0:
+        return (1.0, 1.0, 1.0)
+    k = 1.0 / (1.0 - m)
+    return ((r - m) * k, (g - m) * k, (b - m) * k)
+
+
+def wheel(hue):
+    """Three cosine lobes 120 degrees apart, each 0..1."""
+    a = 2.0 * math.pi * hue
+    return (0.5 + 0.5 * math.cos(a),
+            0.5 + 0.5 * math.cos(a - 2.0944),
+            0.5 + 0.5 * math.cos(a - 4.1888))
+
+
 def scale(rgbw, factor):
     return (int(rgbw[0] * factor), int(rgbw[1] * factor),
             int(rgbw[2] * factor), int(rgbw[3] * factor))
@@ -199,12 +267,14 @@ def add(a, b):
 
 
 def phase_frame(n_leds, illum, waxing, level, offset=0.0, clockwise=False,
-                warmth=0.0, coolness=0.0, earthshine=EARTHSHINE):
+                warmth=0.0, coolness=0.0, earthshine=EARTHSHINE, colour=None):
     """Complete ring image for one moon phase.
 
     illum   0..1 illuminated fraction
     waxing  True = waxing, lit from the right
     level   perceived brightness 0..1 of the lit side
+    colour  optional explicit (r, g, b, w) mix, 0..1 each. When given it
+            replaces warmth/coolness -- the manual mode uses this.
 
     Returns a list of (r, g, b, w) with 0..65535, linear.
     """
@@ -217,7 +287,8 @@ def phase_frame(n_leds, illum, waxing, level, offset=0.0, clockwise=False,
         # percent down to new moon are faded out via brightness.
         bright = level * max(0.0, illum) / ILLUM_MIN
 
-    lit = tint(bright, warmth, coolness)
+    lit = mix(bright, colour) if colour is not None else tint(bright, warmth,
+                                                              coolness)
     weights = arc_weights(n_leds, azimuth, arc, offset, clockwise)
 
     frame = []

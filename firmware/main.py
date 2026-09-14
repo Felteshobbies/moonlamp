@@ -289,7 +289,10 @@ def main():
         except OSError:
             server = None
 
-    manual_state = {"illum": 0.5, "waxing": True, "warmth": 0.0}
+    # Manual mode addresses the four channels directly; W alone is a plain
+    # white moon, which is the sensible thing to land on when you switch to it.
+    manual_state = {"illum": 0.5, "waxing": True,
+                    "r": 0.0, "g": 0.0, "b": 0.0, "w": 1.0}
     def status_text():
         """Short summary for the header of the control page."""
         if wlan is None:
@@ -389,7 +392,7 @@ def main():
                         int(query["brightness"])))
                 except ValueError:
                     pass
-            for key in ("illum", "warmth"):
+            for key in ("illum", "r", "g", "b", "w"):
                 if key in query:
                     try:
                         manual_state[key] = max(0.0, min(
@@ -403,6 +406,16 @@ def main():
             if "led_offset" in query:
                 try:
                     cfg["led_offset"] = float(query["led_offset"]) % 360.0
+                except ValueError:
+                    pass
+            if "led_clock" in query:
+                # Clock position of pixel 0. Degrees remain the stored form;
+                # this only names the positions the way a person would. Applied
+                # after led_offset deliberately: if both ever arrive together,
+                # the one the user actually looked at should win.
+                try:
+                    cfg["led_offset"] = render.clock_to_angle(
+                        int(query["led_clock"]))
                 except ValueError:
                     pass
             if "nudge" in query:

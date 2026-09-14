@@ -28,7 +28,7 @@ DEFAULTS = {
     # 33 mm pitch on the r = 209 mm ring (1313 mm circumference) fits 40 LEDs
     # with a 26 mm closing gap at the seam -- 39 would leave a visible 59 mm.
     "led_count": 40,
-    "led_offset": 270.0,        # physical angle of pixel 0, 270 = bottom
+    "led_offset": 270.0,        # angle of pixel 0; 270 = 6 o'clock, bottom
     "led_clockwise": False,
     "button_program": 12,
     "button_up": 13,
@@ -65,7 +65,7 @@ _RANGES = {
     "earthshine": (0.0, 0.2),
     "brightness": (0, len(BRIGHTNESS_STEPS) - 1),
     "subframes": (1, 16),
-    "program": (0, 5),
+    "program": (0, 6),
 }
 
 

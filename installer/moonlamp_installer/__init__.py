@@ -5,4 +5,4 @@ be taken from factory-fresh to a running lamp with no network and nothing else
 installed. Newer firmware can be pulled from the project's GitHub releases.
 """
 
-VERSION = "1.0"
+VERSION = "1.1"

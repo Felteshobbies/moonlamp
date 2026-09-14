@@ -1,17 +1,17 @@
 # Changelog
 
-## Unreleased
+## 0.2 — 2026-09-14
 
 * **P7 Rainbow**, a new program: the whole spectrum around the ring at once,
-  one turn every twelve seconds. The only program that uses the ring as a ring,
-  and it works because the dome keeps each LED's light on its own side.
+  turning, forty seconds to a lap. The only program that uses the ring as a
+  ring, and it works because the dome keeps each LED's light on its own side --
+  on a flat relief the colours would sum to a muddy white.
 * **Animations no longer step once a second.** Programme time came from
   `time.time()`, which on MicroPython returns whole seconds as an integer, so
   every animated programme advanced in one-second jumps -- three LED positions
   at a time on the rainbow. It now accumulates from `ticks_ms()`, which also
   avoids that counter's own wrap. P0, P3, P6 and P7 were all affected; it was
   simply most visible on the fastest one.
-* **The rainbow turns more slowly**, forty seconds to a lap instead of twelve.
 * **The colour wheel is now constant in power**, the way the Adafruit
   strandtest wheel is. Saturating a cosine wheel gives the right hues but makes
   the six pure primaries a third dimmer than the blends between them -- visible
@@ -22,14 +22,12 @@
   all along but looked dead: White starts at 100 %, and an SK6812's white die
   is about as bright as the other three together, so raising Red changed almost
   nothing visible. The presets pull White down, and the page now says why.
-
 * **An installer**, as a single executable. It takes a blank Pico from BOOTSEL
   to a running lamp -- MicroPython, firmware, Wi-Fi, location, pixel 0 -- and
   updates it afterwards from this repository's releases. It carries the
   firmware and a MicroPython build inside it, so it needs no network.
   It speaks the raw REPL protocol directly rather than driving mpremote, which
   cannot work once frozen: `sys.executable` is then the executable itself.
-
 * **P6 Spectrum**, a new program: the full colour wheel at saturation, one turn
   every seven minutes. The counterpart to P3, which stays muted on purpose.
 * **P3 Colour cycle** is less timid. The coloured share went from 45 % to 62 %,

@@ -122,7 +122,116 @@ if got:
     check("brightness", got[1].get("brightness"), "4")
 
 print()
-print("4. Every control on the page is understood by the handler")
+print("4. Idle spare connections, the way Chrome opens them")
+# The failure seen in the field: Chrome on Windows opens spare connections and
+# sends nothing on them. The old server sat in recv() on such a spare for
+# three seconds, the accept queue overflowed meanwhile, and the browser got
+# ERR_CONNECTION_ABORTED for the real request.
+
+
+def _poll_until(server, handler, done, timeout):
+    t0 = time.time()
+    while time.time() - t0 < timeout and not done():
+        server.poll(handler)
+        time.sleep(0.005)
+    return time.time() - t0
+
+
+def _fetch(port, path, out, key):
+    try:
+        s = socket.create_connection(("127.0.0.1", port), timeout=5)
+        s.sendall(("GET %s HTTP/1.1\r\nHost: x\r\n\r\n" % path).encode())
+        data = b""
+        while True:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            data += chunk
+        s.close()
+        out[key] = data
+    except OSError as exc:
+        out[key] = exc
+
+
+def _ok_handler(path, query):
+    return "200 OK", "text/html", "x" * 20000     # larger than one send buffer
+
+
+server = web.Server(port=0)
+port = server.sock.getsockname()[1]
+spares = [socket.create_connection(("127.0.0.1", port), timeout=5)
+          for _ in range(3)]
+for _ in range(5):
+    server.poll(_ok_handler)        # the server has now taken the spares on
+out = {}
+th = threading.Thread(target=_fetch, args=(port, "/", out, "a"), daemon=True)
+th.start()
+took = _poll_until(server, _ok_handler, lambda: "a" in out, 5.0)
+th.join(timeout=1.0)
+got = out.get("a")
+check("request behind idle spares answered",
+      isinstance(got, bytes) and got.startswith(b"HTTP/1.0 200"), True)
+check("whole page arrived", isinstance(got, bytes) and got.endswith(b"x" * 100),
+      True)
+check("without waiting for the spares", took < 1.0, True)
+print("     answered after %.2f s" % took)
+for s in spares:
+    s.close()
+server.close()
+
+print()
+print("5. More connections at once than the server holds")
+server = web.Server(port=0)
+port = server.sock.getsockname()[1]
+spares = []
+for _ in range(web.MAX_CONNS + 3):
+    spares.append(socket.create_connection(("127.0.0.1", port), timeout=5))
+    server.poll(_ok_handler)        # the main loop polls hundreds of times a second
+out = {}
+threads = []
+for i in range(3):
+    th = threading.Thread(target=_fetch, args=(port, "/p%d" % i, out, i),
+                          daemon=True)
+    th.start()
+    threads.append(th)
+_poll_until(server, _ok_handler, lambda: len(out) == 3, 6.0)
+for th in threads:
+    th.join(timeout=1.0)
+answered = sum(1 for v in out.values()
+               if isinstance(v, bytes) and v.startswith(b"HTTP/1.0 200"))
+check("all three real requests answered", answered, 3)
+check("never more open than MAX_CONNS", len(server.conns) <= web.MAX_CONNS,
+      True)
+for s in spares:
+    s.close()
+_poll_until(server, _ok_handler, lambda: not server.conns, 2.0)
+check("closed spares are let go", len(server.conns), 0)
+server.close()
+
+print()
+print("6. A failing handler still answers")
+
+
+def _broken(path, query):
+    raise ValueError("no such thing")
+
+
+server = web.Server(port=0)
+port = server.sock.getsockname()[1]
+out = {}
+th = threading.Thread(target=_fetch, args=(port, "/", out, "a"), daemon=True)
+th.start()
+_poll_until(server, _broken, lambda: "a" in out, 5.0)
+th.join(timeout=1.0)
+got = out.get("a")
+check("500 instead of an empty reply",
+      isinstance(got, bytes) and got.startswith(b"HTTP/1.0 500"), True)
+check("the reason is shown", isinstance(got, bytes) and b"no such thing" in got,
+      True)
+server.close()
+
+print()
+print("7. Every control on the page is understood by the handler")
 # The classic failure when adding settings: the form field is named one thing
 # and main.py reads another. Nothing errors, the setting simply does nothing.
 import re

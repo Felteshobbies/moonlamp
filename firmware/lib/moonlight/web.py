@@ -3,14 +3,34 @@
 Non-blocking -- `poll()` is called from the main loop and returns
 immediately when nothing is pending, so the frame rate stays constant
 while someone is using the page.
+
+It never waits for one client. Chrome and Edge open several connections at
+once and leave some of them idle for later. A server that sits in recv() on
+one of those stops accepting, the small queue of waiting connections fills,
+and lwIP answers every further one with a reset -- ERR_CONNECTION_ABORTED in
+the browser. So all connections are held open side by side, each is fed what
+has arrived so far, and a request is answered as soon as it is complete,
+whichever socket it came on.
 """
 
 import socket
+import time
 
 try:
     import ujson as json
 except ImportError:
     import json
+
+try:
+    import errno
+    _AGAIN = (errno.EAGAIN, getattr(errno, "EWOULDBLOCK", errno.EAGAIN))
+except ImportError:
+    _AGAIN = (11,)
+
+try:
+    _BLOCKING = BlockingIOError     # CPython; MicroPython raises plain OSError
+except NameError:
+    _BLOCKING = ()
 
 from . import VERSION
 from . import config as configmod
@@ -18,6 +38,26 @@ from . import programs
 from . import render
 
 MAX_REQUEST = 2048
+MAX_CONNS = 4         # held open at once; beyond that the oldest idle one goes
+IDLE_MS = 8000        # a request not complete by then is given up on
+SEND_TIMEOUT = 3.0    # seconds; only while writing a response out
+
+
+def _ticks_ms():
+    if hasattr(time, "ticks_ms"):
+        return time.ticks_ms()
+    return int(time.time() * 1000)
+
+
+def _ticks_diff(a, b):
+    if hasattr(time, "ticks_diff"):
+        return time.ticks_diff(a, b)
+    return a - b
+
+
+def _would_block(exc):
+    return isinstance(exc, _BLOCKING) or (bool(exc.args)
+                                          and exc.args[0] in _AGAIN)
 
 
 def _unquote(s):
@@ -65,68 +105,121 @@ def _send_all(conn, data):
         sent += n
 
 
+def request_state(raw):
+    """True once `raw` holds a whole request, head and body.
+
+    Browsers routinely send the head and the body of a POST in separate TCP
+    segments. Answering on the head alone means the form arrives empty and
+    nothing gets saved. So: wait for the end of the head, look at
+    Content-Length, and wait for that many bytes of body as well.
+    """
+    sep = b"\r\n\r\n"
+    if len(raw) > MAX_REQUEST * 4:
+        return True
+    if sep not in raw:
+        return False
+    head, _, body = raw.partition(sep)
+    length = 0
+    for h in head.split(b"\r\n")[1:]:
+        if h.lower().startswith(b"content-length:"):
+            try:
+                length = int(h.split(b":", 1)[1].strip())
+            except ValueError:
+                length = 0
+            break
+    return len(body) >= min(length, MAX_REQUEST * 4)
+
+
+class _Conn(object):
+    def __init__(self, sock, now):
+        self.sock = sock
+        self.raw = b""
+        self.since = now
+
+
 class Server(object):
     def __init__(self, port=80):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.sock.bind(("0.0.0.0", port))
-        self.sock.listen(2)
+        self.sock.listen(5)
         self.sock.setblocking(False)
+        self.conns = []
 
-    def _read_request(self, conn):
-        """Read the complete request, not just the first packet.
+    def _accept(self, now):
+        """Take every waiting connection off the queue.
 
-        Browsers routinely send the head and the body of a POST in separate
-        TCP segments. Calling recv() once often yields only the head; the
-        form then arrives empty and nothing gets saved. So: read to the end
-        of the head, look at Content-Length, then pull in the rest.
+        Leaving them there is what got them reset: the queue is short, and a
+        connection that does not fit is refused by the network stack, not by
+        anything this code could answer.
         """
-        sep = b"\r\n\r\n"
-        raw = b""
-        while sep not in raw:
+        while True:
             try:
-                chunk = conn.recv(MAX_REQUEST)
+                sock, _ = self.sock.accept()
             except OSError:
-                chunk = b""
-            if not chunk:
-                return raw
-            raw += chunk
-            if len(raw) > MAX_REQUEST * 4:
-                return raw
+                return
+            try:
+                sock.setblocking(False)
+            except Exception:
+                _close(sock)
+                continue
+            if len(self.conns) >= MAX_CONNS:
+                # Make room by dropping a connection that has sent nothing --
+                # a browser's spare, opened in case it is needed. Closing one
+                # of those costs nothing; the browser opens another.
+                victim = None
+                for c in self.conns:
+                    if not c.raw:
+                        victim = c
+                        break
+                self._drop(victim or self.conns[0])
+            self.conns.append(_Conn(sock, now))
 
-        head, _, body = raw.partition(sep)
-        length = 0
-        for h in head.split(b"\r\n")[1:]:
-            if h.lower().startswith(b"content-length:"):
-                try:
-                    length = int(h.split(b":", 1)[1].strip())
-                except ValueError:
-                    length = 0
-                break
-        if length > MAX_REQUEST * 4:
-            length = MAX_REQUEST * 4
-        while len(body) < length:
-            try:
-                chunk = conn.recv(length - len(body))
-            except OSError:
-                break
-            if not chunk:
-                break
-            body += chunk
-        return head + sep + body
+    def _drop(self, c):
+        _close(c.sock)
+        try:
+            self.conns.remove(c)
+        except ValueError:
+            pass
 
     def poll(self, handler):
-        """Serve one pending request, if there is one."""
+        """Feed every open connection and answer any request now complete.
+
+        Returns True if a request was answered.
+        """
+        now = _ticks_ms()
+        self._accept(now)
+        served = False
+        for c in list(self.conns):
+            closed = False
+            try:
+                chunk = c.sock.recv(MAX_REQUEST)
+                if chunk:
+                    c.raw += chunk
+                else:
+                    closed = True           # the browser gave up on it
+            except OSError as exc:
+                if not _would_block(exc):
+                    self._drop(c)
+                    continue
+
+            if request_state(c.raw):
+                self._answer(c, handler)
+                served = True
+            elif closed or _ticks_diff(now, c.since) > IDLE_MS:
+                # A head that arrived but whose body never did is still
+                # answered, so the portal can say the form was lost.
+                if b"\r\n\r\n" in c.raw:
+                    self._answer(c, handler)
+                    served = True
+                else:
+                    self._drop(c)
+        return served
+
+    def _answer(self, c, handler):
+        conn = c.sock
         try:
-            conn, _ = self.sock.accept()
-        except OSError:
-            return False
-        try:
-            conn.settimeout(3.0)
-            raw = self._read_request(conn)
-            if not raw:
-                return True
-            head, _, body = raw.partition(b"\r\n\r\n")
+            head, _, body = c.raw.partition(b"\r\n\r\n")
             line = head.split(b"\r\n", 1)[0].decode()
             parts = line.split(" ")
             path = parts[1] if len(parts) > 1 else "/"
@@ -136,32 +229,55 @@ class Server(object):
                 query = parse_query(qs)
             if body:
                 query.update(parse_query(body.decode()))
-            status, ctype, payload = handler(path, query)
+            try:
+                status, ctype, payload = handler(path, query)
+            except Exception as exc:
+                # Say so in the browser, not just on the REPL: an empty reply
+                # leaves whoever is looking at the page with nothing to go on.
+                print("HTTP error in handler:", exc)
+                status, ctype = "500 Internal Server Error", "text/plain"
+                payload = "Moon lamp: %s: %s" % (type(exc).__name__, exc)
             if isinstance(payload, str):
                 payload = payload.encode()
             header = ("HTTP/1.0 %s\r\nContent-Type: %s\r\n"
                       "Content-Length: %d\r\n"
                       "Cache-Control: no-store\r\nConnection: close\r\n\r\n"
                       % (status, ctype, len(payload)))
+            # Waiting is fine here: the browser asked and is reading. A
+            # non-blocking send would stop at the edge of lwIP's send buffer,
+            # well short of the control page.
+            conn.settimeout(SEND_TIMEOUT)
             # Bytes, not str: MicroPython accepts str, CPython does not --
             # without that difference the bug only shows up on the device.
             _send_all(conn, header.encode())
             _send_all(conn, payload)
+            # Anything still unread when the socket closes makes lwIP send a
+            # reset instead of a FIN, and a reset throws away the part of the
+            # page that is still in flight.
+            conn.setblocking(False)
+            for _ in range(4):
+                try:
+                    if not conn.recv(MAX_REQUEST):
+                        break
+                except OSError:
+                    break
         except Exception as exc:
             # The REPL is the only place to see anything on the device
             print("HTTP error:", exc)
         finally:
-            try:
-                conn.close()
-            except Exception:
-                pass
-        return True
+            self._drop(c)
 
     def close(self):
-        try:
-            self.sock.close()
-        except Exception:
-            pass
+        for c in list(self.conns):
+            self._drop(c)
+        _close(self.sock)
+
+
+def _close(sock):
+    try:
+        sock.close()
+    except Exception:
+        pass
 
 
 # ------------------------------------------------------------------- Portal

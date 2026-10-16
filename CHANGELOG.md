@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+* **The control page loads in Chrome and Edge.** Those browsers open several
+  connections at once and leave some idle for later. The server waited up to
+  three seconds in `recv()` on whichever it accepted first, the two-place
+  accept queue overflowed meanwhile, and lwIP reset the real request -- the
+  browser showed `ERR_CONNECTION_ABORTED` although the lamp was on the network
+  and had an address. The server now holds up to four connections side by
+  side, never waits on any of them, and answers a request as soon as it is
+  complete, whichever socket it came on. Spares that never send anything are
+  dropped to make room.
+* A failing page now answers `500` with the reason instead of closing the
+  connection empty.
+
 ## 0.2.1 — 2026-09-14
 
 * **Temporal dithering no longer fights the animations.** It used to build its

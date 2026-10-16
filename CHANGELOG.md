@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.2 — 2026-10-16
 
 * **The control page loads in Chrome and Edge.** Those browsers open several
   connections at once and leave some idle for later. The server waited up to

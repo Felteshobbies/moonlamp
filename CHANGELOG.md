@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.3 — 2026-10-17
 
 * **The control page no longer fails with `MemoryError`.** It was put together
   as one string of about 11 kB, and the body alone needed a single 8 kB block

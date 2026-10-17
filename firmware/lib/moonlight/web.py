@@ -55,6 +55,14 @@ def _ticks_diff(a, b):
     return a - b
 
 
+def _collect():
+    try:
+        import gc
+        gc.collect()
+    except Exception:
+        pass
+
+
 def _would_block(exc):
     return isinstance(exc, _BLOCKING) or (bool(exc.args)
                                           and exc.args[0] in _AGAIN)
@@ -229,6 +237,10 @@ class Server(object):
                 query = parse_query(qs)
             if body:
                 query.update(parse_query(body.decode()))
+            # The page is built from many short strings. Collecting first
+            # gives it a tidy heap to be built in, instead of whatever the
+            # frame loop left behind.
+            _collect()
             try:
                 status, ctype, payload = handler(path, query)
             except Exception as exc:
@@ -237,12 +249,16 @@ class Server(object):
                 print("HTTP error in handler:", exc)
                 status, ctype = "500 Internal Server Error", "text/plain"
                 payload = "Moon lamp: %s: %s" % (type(exc).__name__, exc)
-            if isinstance(payload, str):
-                payload = payload.encode()
+            # A page may come as a list of pieces; each is encoded and sent on
+            # its own, so no block the size of the whole page is ever needed.
+            if not isinstance(payload, (list, tuple)):
+                payload = [payload]
+            pieces = [p.encode() if isinstance(p, str) else p for p in payload]
+            payload = None
             header = ("HTTP/1.0 %s\r\nContent-Type: %s\r\n"
                       "Content-Length: %d\r\n"
                       "Cache-Control: no-store\r\nConnection: close\r\n\r\n"
-                      % (status, ctype, len(payload)))
+                      % (status, ctype, sum(len(p) for p in pieces)))
             # Waiting is fine here: the browser asked and is reading. A
             # non-blocking send would stop at the edge of lwIP's send buffer,
             # well short of the control page.
@@ -250,7 +266,8 @@ class Server(object):
             # Bytes, not str: MicroPython accepts str, CPython does not --
             # without that difference the bug only shows up on the device.
             _send_all(conn, header.encode())
-            _send_all(conn, payload)
+            for p in pieces:
+                _send_all(conn, p)
             # Anything still unread when the socket closes makes lwIP send a
             # reset instead of a FIN, and a reset throws away the part of the
             # page that is still in flight.
@@ -300,10 +317,8 @@ def portal_page(cfg, message=""):
         val = "" if kind == "password" else str(cfg.get(key, ""))
         rows.append("<label>%s<input name='%s' type='%s' value='%s'></label>"
                     % (label, key, kind, val))
-    return _PAGE % {
-        "head": "",
-        "title": "Moon lamp setup",
-        "body": ("<h1>Moon lamp setup</h1>"
+    return _page("Moon lamp setup", [
+                 "<h1>Moon lamp setup</h1>"
                  "%s<form method='post' action='/save'>%s"
                  "<button type='submit'>Save and restart</button>"
                  "</form>"
@@ -312,8 +327,7 @@ def portal_page(cfg, message=""):
                  "pixel&nbsp;0 can also be set on the device: press and hold "
                  "the program button.</p>"
                  % ("<p class='msg'>%s</p>" % message if message else "",
-                    "".join(rows))),
-    }
+                    "".join(rows))])
 
 
 DESCRIPTIONS = (
@@ -522,8 +536,16 @@ def control_page(cfg, info):
                "<p class='hint'>This page refreshes every 30&nbsp;seconds. "
                "Firmware %s.</p>" % VERSION)
 
-    return _PAGE % {"title": "Moon lamp", "body": "".join(out),
-                    "head": "<meta http-equiv='refresh' content='30'>"}
+    return _page("Moon lamp", out,
+                 "<meta http-equiv='refresh' content='30'>")
+
+
+def _page(title, body, head=""):
+    """The whole page as a list of pieces, each small enough to allocate."""
+    parts = [_PAGE_TOP % (head, title), _STYLE]
+    parts.extend(body)
+    parts.append("</body></html>")
+    return parts
 
 
 # Shows the slider value while dragging, without needing a round trip
@@ -531,9 +553,16 @@ _LIVE = (" oninput=\"this.parentNode.querySelector('output').textContent="
          "this.value+(this.name=='led_offset'?'\\u00b0':' %')\"")
 
 
-_PAGE = """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+# The page goes out in pieces rather than as one string. Joined, the control
+# page is some 11 kB, and encoding it needs another block that size; on a
+# Pico W whose heap the Wi-Fi stack has cut into pieces, a block that large is
+# sometimes not there -- MemoryError, and the page did not load.
+_PAGE_TOP = """<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-%(head)s<title>%(title)s</title><style>
+%s<title>%s</title>"""
+
+# Sent as it is, never formatted
+_STYLE = """<style>
 :root{--fg:#14161a;--bg:#eef0f2;--card:#fff;--mut:#5c646e;--line:#d6dbe1;
  --accent:#b87333;color-scheme:light dark}
 @media (prefers-color-scheme:dark){:root{--fg:#e6e9ed;--bg:#101317;
@@ -566,15 +595,15 @@ dd{margin:0;font-weight:600;font-variant-numeric:tabular-nums;font-size:.95rem}
 .chip.warn{color:#c0392b}
 label{display:block;margin:0 0 .9rem;font-size:.9rem}
 label output{float:right;color:var(--mut);font-variant-numeric:tabular-nums}
-input,select{width:100%%;padding:.5rem;font:inherit;margin-top:.3rem;
+input,select{width:100%;padding:.5rem;font:inherit;margin-top:.3rem;
  border:1px solid var(--line);border-radius:8px;background:var(--card);
  color:inherit}
 input[type=range]{padding:0;border:0;background:transparent;accent-color:var(--accent)}
-button{width:100%%;padding:.75rem;font:inherit;font-weight:600;border:0;
+button{width:100%;padding:.75rem;font:inherit;font-weight:600;border:0;
  border-radius:9px;background:var(--accent);color:#fff;margin-top:.4rem}
 .msg{color:var(--mut);font-size:.9rem}
 .hint{color:var(--mut);font-size:.82rem;margin-top:1.6rem}
-</style></head><body>%(body)s</body></html>"""
+</style></head><body>"""
 
 # Earthshine is carried in tenths of a percent, so it needs its own formatting
 _LIVE_PERMILLE = (" oninput=\"this.parentNode.querySelector('output')"

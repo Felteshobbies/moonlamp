@@ -243,9 +243,10 @@ from moonlight import web as webmod  # noqa: E402
 cfg = configmod.load()
 cfg.update({"program": 1, "brightness": 3, "led_count": 44,
             "led_offset": 180.0, "led_clockwise": False})
-page = webmod.control_page(cfg, {"status": "", "facts": [],
-                                 "manual": {"illum": 0.5, "waxing": True,
-                                            "warmth": 0.0}})
+pieces = webmod.control_page(cfg, {"status": "", "facts": [],
+                                   "manual": {"illum": 0.5, "waxing": True,
+                                              "warmth": 0.0}})
+page = "".join(pieces)
 
 names = set(re.findall(r"<(?:input|select)[^>]*name='([a-z_]+)'", page))
 names |= set(re.findall(r"href='/set[?]([a-z_]+)=", page))
@@ -269,6 +270,46 @@ pitch = 360.0 / cfg["led_count"]
 check("one nudge is one LED pitch",
       round(((cfg["led_offset"] + pitch) % 360.0) - cfg["led_offset"], 4),
       round(pitch, 4))
+
+print()
+print("8. Pages go out in pieces small enough for a fragmented heap")
+# Seen on hardware: "MemoryError: memory allocation failed, allocating 8392
+# bytes" while building the control page as one string. No single piece may
+# come anywhere near that.
+LIMIT = 4096
+check("control page is in pieces", len(pieces) > 5, True)
+check("largest control-page piece below %d bytes" % LIMIT,
+      max(len(p.encode()) for p in pieces) < LIMIT, True)
+print("     %d pieces, %d bytes, largest %d"
+      % (len(pieces), len(page.encode()),
+         max(len(p.encode()) for p in pieces)))
+portal = webmod.portal_page(cfg, "hello")
+check("largest portal piece below %d bytes" % LIMIT,
+      max(len(p.encode()) for p in portal) < LIMIT, True)
+check("the stylesheet is not mangled", "width:100%;" in page
+      and "100%%" not in page, True)
+check("page is complete", page.startswith("<!DOCTYPE html>")
+      and page.endswith("</body></html>"), True)
+
+
+def _pieces_handler(path, query):
+    return "200 OK", "text/html", ["<p>", "é" * 3000, "</p>"]
+
+
+server = web.Server(port=0)
+port = server.sock.getsockname()[1]
+out = {}
+th = threading.Thread(target=_fetch, args=(port, "/", out, "a"), daemon=True)
+th.start()
+_poll_until(server, _pieces_handler, lambda: "a" in out, 5.0)
+th.join(timeout=1.0)
+got = out.get("a", b"")
+head, _, body = got.partition(b"\r\n\r\n") if isinstance(got, bytes) else (b"", b"", b"")
+want = ("<p>" + "é" * 3000 + "</p>").encode()
+check("pieces arrive joined", body, want)
+check("Content-Length counts bytes, not characters",
+      b"Content-Length: %d\r\n" % len(want) in head, True)
+server.close()
 
 print()
 if FAILED:

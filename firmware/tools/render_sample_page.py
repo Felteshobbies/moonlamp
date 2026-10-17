@@ -53,6 +53,6 @@ info = {
     "output": "blocking",
 }
 
-html = web.control_page(cfg, info)
+html = "".join(web.control_page(cfg, info))
 io.open(OUT, "w", encoding="utf-8", newline="\n").write(html)
 print("wrote %s (%d bytes)" % (os.path.relpath(OUT), len(html)))

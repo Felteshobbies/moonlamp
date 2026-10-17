@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+* **The control page no longer fails with `MemoryError`.** It was put together
+  as one string of about 11 kB, and the body alone needed a single 8 kB block
+  -- which a Pico W heap, cut up by the Wi-Fi stack, sometimes does not have.
+  Before 0.2.2 that showed as a dropped connection, indistinguishable from the
+  connection problem fixed there; 0.2.2's error page finally named it. Pages
+  are now handed to the server as a list of pieces of at most a few kilobytes,
+  each encoded and sent on its own, and the heap is collected before a page is
+  built.
+
 ## 0.2.2 — 2026-10-16
 
 * **The control page loads in Chrome and Edge.** Those browsers open several
